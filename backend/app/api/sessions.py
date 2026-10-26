@@ -136,7 +136,7 @@ def post_calibration(body: CalibrationIn, s: VideoSession = Depends(get_session_
         "mean_error_px": d["mean_error_px"],
         "condition_number": d["condition_number"],
         "warnings": d["warnings"],
-        "quality": calibration_quality(d["mean_error_m"], int(sum(d["inliers"])), d["warnings"]),
+        "quality": calibration_quality(d["mean_error_m"], int(sum(d["inliers"])), len(d["inliers"])),
         "saved": False,
     }
     if body.dry_run:

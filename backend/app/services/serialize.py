@@ -5,12 +5,15 @@ from __future__ import annotations
 from app.db.models import AnalysisJob, CourtCalibration, StrokeEvent, Video, VideoSession
 
 
-def calibration_quality(mean_error_m: float, n_points: int, warnings: list[str]) -> str:
-    if n_points <= 4:
+def calibration_quality(mean_error_m: float, n_inliers: int, n_total: int | None = None) -> str:
+    """good / fair / poor from the inlier error, downgraded when RANSAC had to reject landmarks."""
+    n_total = n_inliers if n_total is None else n_total
+    if n_inliers <= 4:
         return "fair"  # exact fit: error cannot be verified
-    if mean_error_m <= 0.08:
+    rejected = n_total - n_inliers
+    if mean_error_m <= 0.08 and rejected == 0:
         return "good"
-    if mean_error_m <= 0.15:
+    if mean_error_m <= 0.15 and rejected <= max(1, n_total // 4):
         return "fair"
     return "poor"
 
@@ -57,7 +60,7 @@ def calibration_out(c: CourtCalibration | None) -> dict | None:
         "mean_error_px": c.mean_error_px,
         "condition_number": c.condition_number,
         "warnings": c.warnings,
-        "quality": calibration_quality(c.mean_error_m, sum(bool(i) for i in c.inliers), c.warnings),
+        "quality": calibration_quality(c.mean_error_m, sum(bool(i) for i in c.inliers), len(c.inliers)),
         "saved": True,
     }
 

@@ -72,6 +72,12 @@ def active_stroke_model_dir(settings: Settings) -> Path | None:
 
 
 def execute_job(job_id: str, settings: Settings, progress, cancel: threading.Event) -> dict:
+    from app.services.demo import ensure_demo_rendered
+
+    with session_factory()() as db:
+        job = db.get(AnalysisJob, job_id)
+        video_id = db.get(VideoSession, job.session_id).video_id
+    ensure_demo_rendered(video_id, settings, progress, cancel)
     with session_factory()() as db:
         job = db.get(AnalysisJob, job_id)
         session = db.get(VideoSession, job.session_id)

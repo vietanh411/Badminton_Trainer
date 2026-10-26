@@ -43,7 +43,8 @@ each to one of 32 named court keypoints (line intersections and net-post bases).
 * Reported: per-point error in metres (image → court) and pixels (court → image), mean/max error,
   condition number, RANSAC outliers, and warnings — e.g. with exactly 4 points the fit is exact and
   the error cannot reveal mistakes; landmarks covering a small part of the court extrapolate poorly.
-* Quality label: *good* (≥ 5 inliers and mean error ≤ 8 cm), *fair* (≤ 15 cm or only 4 points), *poor*.
+* Quality label: *good* (≥ 5 inliers, mean error ≤ 8 cm, no landmark rejected), *fair* (≤ 15 cm with at most
+  a quarter of the landmarks rejected, or only 4 points), otherwise *poor*.
 * Calibrations are stored with the image size they were made on; `Calibration.scaled_to()` adapts
   `H` to the down-scaled analysis frames.
 

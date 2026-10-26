@@ -13,7 +13,14 @@ a time-weighted court-occupancy heatmap, distance and speed profiles, zone cover
 changes, recovery-to-base and footwork proxies, candidate stroke events, an annotated video player,
 session comparison, and CSV / JSON / PNG / SVG / PDF exports.
 
-<!-- SCREENSHOTS -->
+| Dashboard | Analysis: annotated playback, metrics and heatmap |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Analysis](docs/screenshots/analysis.png) |
+
+![Session comparison](docs/screenshots/compare.png)
+
+*Screenshots show the built-in synthetic demo sessions (labelled SYNTHETIC DEMO DATA in the app); no real
+player data is included in this repository.*
 
 ## Why this project
 

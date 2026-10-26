@@ -355,7 +355,10 @@ def test_sse_stream(client, synthetic_clip, tmp_path):
 
 def test_unknown_ids(client):
     assert client.get("/api/sessions/does-not-exist").status_code == 404
-    assert client.get("/api/videos/../../etc/passwd").status_code == 404
+    assert client.get("/api/videos/..%2F..%2Fetc%2Fpasswd").status_code == 404
+    # The SPA fallback (when frontend/dist exists) must never serve files outside the build folder.
+    r = client.get("/../backend/pyproject.toml")
+    assert b"setuptools" not in r.content
     assert client.get("/api/jobs/x").status_code == 404
     assert client.get("/api/compare", params={"a": "x", "b": "y"}).status_code == 404
 
@@ -380,3 +383,30 @@ def test_retention_purges_old_sessions(tmp_path, synthetic_clip):
         assert c.get(f"/api/sessions/{new['session']['id']}").status_code == 200
         assert not (settings.uploads_dir / old["video"]["id"]).exists()
         assert (settings.uploads_dir / new["video"]["id"]).exists()
+
+
+def test_demo_returns_immediately_and_renders_in_job(client):
+    t0 = time.time()
+    r = client.post("/api/demo", params={"variant": 2, "duration_s": 10})
+    assert r.status_code == 201, r.text
+    assert time.time() - t0 < 5  # rendering happens in the background job
+    body = r.json()
+    assert body["session"]["data_source"] == "synthetic" and body["session"]["is_demo"]
+    assert body["session"]["calibration"]["quality"] == "good"
+    done = wait_job(client, body["job"]["id"], timeout=180)
+    assert done["status"] == "COMPLETED", done
+    sid = body["session"]["id"]
+    s = client.get(f"/api/sessions/{sid}").json()
+    assert s["video"]["codec"] != "pending" and s["summary"]["synthetic"] is True
+    assert client.get(f"/api/videos/{s['video_id']}/thumbnail").status_code == 200
+    m = client.get(f"/api/sessions/{sid}/metrics").json()
+    assert m["synthetic"] is True and m["quality"]["target_coverage_pct"] > 90
+
+
+def test_calibration_quality_downgrades_on_rejected_points():
+    from app.services.serialize import calibration_quality
+
+    assert calibration_quality(0.03, 8, 8) == "good"
+    assert calibration_quality(0.03, 7, 8) == "fair"
+    assert calibration_quality(0.03, 5, 9) == "poor"
+    assert calibration_quality(0.0, 4, 4) == "fair"
