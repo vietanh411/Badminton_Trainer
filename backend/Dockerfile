@@ -7,9 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# libGL/glib for OpenCV (ultralytics pulls the non-headless wheel), libgomp for PyTorch/MediaPipe.
+# libGL/glib for OpenCV (ultralytics pulls the non-headless wheel), libgomp for PyTorch/MediaPipe,
+# libEGL/libGLES because MediaPipe Tasks load them even when running on the CPU.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 \
+ && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 libegl1 libgles2 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/backend

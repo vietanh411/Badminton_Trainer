@@ -18,8 +18,8 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/pyproject.toml
-      - name: System libraries for OpenCV / MediaPipe
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0
+      - name: System libraries for OpenCV / MediaPipe (MediaPipe Tasks load libEGL even on CPU)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libegl1 libgles2
       - name: Install (CPU PyTorch)
         run: |
           pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
