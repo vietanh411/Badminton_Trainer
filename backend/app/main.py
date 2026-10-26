@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,6 +16,7 @@ from app.api import benchmark, demo, jobs, sessions, system, videos
 from app.core.config import Settings, get_settings
 from app.core.deps import require_api_key
 from app.db.session import init_engine, run_migrations
+from app.services.retention import purge_expired
 from app.workers.jobs import JobManager
 from vision.pipeline import PIPELINE_VERSION
 from vision.video.reader import VideoError
@@ -36,7 +38,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if n:
             log.warning("marked %d interrupted job(s) as failed", n)
         app.state.jobs = manager
+        retention_task = None
+        if settings.retention_days > 0:
+
+            async def retention_loop():
+                while True:
+                    await asyncio.to_thread(purge_expired, settings)
+                    await asyncio.sleep(6 * 3600)
+
+            retention_task = asyncio.create_task(retention_loop())
         yield
+        if retention_task is not None:
+            retention_task.cancel()
         manager.shutdown()
 
     app = FastAPI(

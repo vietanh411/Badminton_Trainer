@@ -245,6 +245,15 @@ def test_full_analysis_flow(client, synthetic_clip, tmp_path):
         assert p["review_status"] == "rejected"
     assert client.patch("/api/strokes/nope", json={"review_status": "confirmed"}).status_code == 404
 
+    clip = client.get(f"/api/sessions/{sid}/annotated-video", params={"start": 1, "end": 3})
+    assert clip.status_code == 200 and len(clip.content) > 1000
+    assert client.get(f"/api/sessions/{sid}/annotated-video", params={"start": 0, "end": 100}).status_code == 422
+
+    # Raw vs smoothed landmark series.
+    ps = client.get(f"/api/sessions/{sid}/pose-series", params={"landmark": "right_wrist"}).json()
+    assert len(ps["t"]) == len(ps["x_raw"]) == len(ps["x_smooth"]) == len(ps["right_knee_flexion_smooth"])
+    assert client.get(f"/api/sessions/{sid}/pose-series", params={"landmark": "tail"}).status_code == 422
+
     # Exports.
     csv_ = client.get(f"/api/sessions/{sid}/export/positions.csv")
     assert csv_.status_code == 200 and csv_.text.startswith("# SYNTHETIC DEMO DATA")
@@ -349,3 +358,25 @@ def test_unknown_ids(client):
     assert client.get("/api/videos/../../etc/passwd").status_code == 404
     assert client.get("/api/jobs/x").status_code == 404
     assert client.get("/api/compare", params={"a": "x", "b": "y"}).status_code == 404
+
+
+def test_retention_purges_old_sessions(tmp_path, synthetic_clip):
+    from datetime import UTC, datetime, timedelta
+
+    from app.db.models import VideoSession
+    from app.db.session import session_factory
+    from app.services.retention import purge_expired
+
+    with make_client(tmp_path, retention_days=7) as c:
+        old = upload(c, synthetic_clip["video"]).json()
+        new = upload(c, synthetic_clip["video"]).json()
+        settings = c.app.dependency_overrides[next(iter(c.app.dependency_overrides))]()
+        with session_factory()() as db:
+            s = db.get(VideoSession, old["session"]["id"])
+            s.updated_at = datetime.now(UTC) - timedelta(days=30)
+            db.commit()
+        assert purge_expired(settings) == 1
+        assert c.get(f"/api/sessions/{old['session']['id']}").status_code == 404
+        assert c.get(f"/api/sessions/{new['session']['id']}").status_code == 200
+        assert not (settings.uploads_dir / old["video"]["id"]).exists()
+        assert (settings.uploads_dir / new["video"]["id"]).exists()

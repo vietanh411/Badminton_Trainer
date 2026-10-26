@@ -207,3 +207,68 @@ def annotations_payload(res: dict, start: float, end: float) -> dict:
             "frames": frames,
         }
     )
+
+
+def pose_series_payload(res: dict, landmark: str, window_s: float = 0.3) -> dict:
+    """One landmark's image trajectory and the joint-angle proxies, raw next to smoothed.
+
+    Smoothing is a Savitzky–Golay filter applied only inside runs of consecutive visible samples
+    (never across gaps). It exists to *show* what temporal filtering does; the stored landmarks and
+    the stroke detector keep using the raw values (the detector applies its own light smoothing).
+    """
+    from scipy.signal import savgol_filter
+
+    from vision.pose.landmarks import IDX, MIN_VIS, body_metrics
+
+    if landmark not in IDX:
+        raise KeyError(f"unknown landmark '{landmark}'")
+    k = IDX[landmark]
+    t = res["positions"]["t"].to_numpy(float)
+    xy = res["pose_xy"].astype(float)
+    vis = res["pose_vis"].astype(float)
+    fps = 1.0 / float(np.median(np.diff(t))) if len(t) > 1 else 15.0
+    win = max(5, int(round(window_s * fps)) | 1)
+
+    def smooth(v: np.ndarray) -> np.ndarray:
+        out = np.full_like(v, np.nan)
+        ok = np.isfinite(v)
+        idx = np.flatnonzero(ok)
+        if idx.size == 0:
+            return out
+        for run in np.split(idx, np.flatnonzero(np.diff(idx) > 1) + 1):
+            if len(run) >= win:
+                out[run] = savgol_filter(v[run], win, 2)
+            else:
+                out[run] = v[run]
+        return out
+
+    x = np.where(vis[:, k] >= MIN_VIS, xy[:, k, 0], np.nan)
+    y = np.where(vis[:, k] >= MIN_VIS, xy[:, k, 1], np.nan)
+    angles = body_metrics(xy, vis)
+    series = {
+        "x_raw": x,
+        "x_smooth": smooth(x),
+        "y_raw": y,
+        "y_smooth": smooth(y),
+        "visibility": vis[:, k],
+    }
+    for name in (
+        "left_knee_flexion",
+        "right_knee_flexion",
+        "left_elbow_angle",
+        "right_elbow_angle",
+        "torso_lean_deg",
+        "stance_width",
+    ):
+        series[f"{name}_raw"] = angles[name]
+        series[f"{name}_smooth"] = smooth(angles[name])
+    return clean_json(
+        {
+            "landmark": landmark,
+            "window_samples": win,
+            "t": t,
+            "units": "x/y in analysis-frame pixels; angles in degrees "
+            "(2-D monocular proxies); stance width in torso lengths",
+            **series,
+        }
+    )

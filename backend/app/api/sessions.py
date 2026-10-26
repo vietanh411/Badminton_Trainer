@@ -9,6 +9,7 @@ import json
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -434,6 +435,71 @@ def annotations(
     if end - start > 120:
         raise HTTPException(status_code=422, detail="request at most 120 s of annotations at a time")
     return R.annotations_payload(_results(s, settings), start, end)
+
+
+@router.get("/{session_id}/annotated-video", summary="Render an annotated clip (≤ 60 s) with overlays burned in")
+async def annotated_video(
+    start: float = Query(0.0, ge=0),
+    end: float = Query(20.0, ge=0),
+    s: VideoSession = Depends(get_session_or_404),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    import uuid
+
+    from starlette.background import BackgroundTask
+
+    from vision.calibration.homography import Calibration
+    from vision.visualization.overlay import render_annotated_clip
+
+    if end <= start or end - start > 60:
+        raise HTTPException(status_code=422, detail="choose an interval of at most 60 s (end > start)")
+    res = _results(s, settings)
+    sm = res["summary"]
+    video = db.get(Video, s.video_id)
+    H = None
+    if sm.get("calibration_used"):
+        H = Calibration.from_dict(sm["calibration_used"]).scaled_to(sm["analysis"]["width"], sm["analysis"]["height"])
+    stem = settings.tmp_dir / f"annotated_{uuid.uuid4().hex}"
+    try:
+        path = await asyncio.to_thread(
+            render_annotated_clip,
+            safe_path(settings, video.stored_path),
+            stem,
+            res["positions"],
+            res["tracks"],
+            res["pose_xy"],
+            res["pose_vis"],
+            sm["analysis"]["fps"],
+            sm["analysis"]["width"],
+            H,
+            start,
+            end,
+            bool(sm["synthetic"]),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _record_export(db, s, "annotated-video", path.stat().st_size)
+    media = "video/webm" if path.suffix == ".webm" else "video/mp4"
+    return FileResponse(
+        path,
+        media_type=media,
+        filename=f"badmintonvision_{s.id[:8]}_{start:.0f}-{end:.0f}s{path.suffix}",
+        background=BackgroundTask(path.unlink, missing_ok=True),
+    )
+
+
+@router.get("/{session_id}/pose-series", summary="Raw vs temporally smoothed landmark and joint-angle series")
+def pose_series(
+    landmark: str = Query("right_wrist", description="MediaPipe landmark name, e.g. right_wrist, left_ankle"),
+    window_s: float = Query(0.3, ge=0.1, le=2.0),
+    s: VideoSession = Depends(get_session_or_404),
+    settings: Settings = Depends(get_settings),
+):
+    try:
+        return R.pose_series_payload(_results(s, settings), landmark, window_s)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------------- strokes

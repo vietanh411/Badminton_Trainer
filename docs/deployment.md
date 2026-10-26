@@ -88,6 +88,7 @@ environment (CPU-only PyTorch); the performance script records it automatically 
 * **Deletion**: deleting a session (UI or `DELETE /api/sessions/{id}`) removes its results,
   annotations and database rows, and the uploaded video when no other session uses it. Cache entries
   keyed by the video hash remain until `data/cache/` is cleared; delete that folder to purge all
-  derived data. `BV_RETENTION_DAYS` is reserved for automatic expiry (not yet enforced).
+  derived data. With `BV_RETENTION_DAYS=N` (> 0) sessions not updated for N days are deleted automatically
+  (checked at start-up and every 6 hours; sessions with a running analysis are skipped).
 * **Demo mode**: synthetic sessions are generated locally and flagged as synthetic everywhere; disable
   with `BV_ENABLE_DEMO=false` in deployments.

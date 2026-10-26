@@ -146,7 +146,7 @@ curl -o report.pdf http://localhost:8000/api/sessions/$SID/report
 Endpoints: `POST /api/videos`, `GET /api/videos/{id}[/preview|/frame|/thumbnail]`,
 `POST /api/sessions/{id}/calibration[/auto]`, `GET /api/sessions/{id}/detections`,
 `POST /api/sessions/{id}/player-selection|corrections|analyze`, `GET|POST /api/jobs/{id}[/cancel|/events]`,
-`GET /api/sessions/{id}/metrics|trajectory|heatmap|events|annotations|tracks|strokes|report|export/{kind}|evaluation`,
+`GET /api/sessions/{id}/metrics|trajectory|heatmap|events|annotations|pose-series|tracks|strokes|report|annotated-video|export/{kind}|evaluation|benchmark[/template]`,
 `GET /api/compare?a=&b=`, `POST /api/demo`. Interactive docs at `/docs`.
 
 ## Project layout
@@ -190,7 +190,7 @@ docker/ + docker-compose*.yml, .github/workflows/ci.yml
 Shuttle tracking (TrackNet-style) to time shots and enable true recovery-after-shot metrics; video
 stabilisation for handheld footage; a learned re-identification embedding for doubles; an annotated
 real-footage benchmark with session-level splits; an in-browser box/ground-contact annotation canvas;
-a distributed job queue for cloud deployment; automatic retention enforcement.
+a distributed job queue for cloud deployment.
 
 ---
 
