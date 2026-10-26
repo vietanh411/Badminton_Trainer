@@ -111,7 +111,10 @@ class TruthDetector:
         self.times = np.array([f["t"] for f in truth["frames"]])
         self.noise = noise_px
         self.miss_rate = miss_rate
-        self.occlusions = occlusion_windows or []
+        # Scenes may declare occlusion windows in their truth file (used by the synthetic benchmark).
+        self.occlusions = (
+            occlusion_windows if occlusion_windows is not None else [tuple(o) for o in truth.get("occlusions", [])]
+        )
         self.rng = np.random.default_rng(seed)
 
     def _frame_truth(self, t: float) -> dict:

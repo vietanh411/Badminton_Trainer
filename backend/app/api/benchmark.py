@@ -67,6 +67,62 @@ def put_annotations(
     return {"saved": True, "frames": len(doc.get("frames", [])), "strokes": len(doc.get("strokes", []))}
 
 
+@router.get(
+    "/sessions/{session_id}/benchmark/template",
+    summary="Pre-annotation built from the latest analysis, to be corrected by a human before use as ground truth",
+)
+def annotation_template(
+    every_s: float = 0.5,
+    s: VideoSession = Depends(get_session_or_404),
+    settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db),
+):
+    import pandas as pd
+
+    rd = results_dir(settings, s)
+    if rd is None:
+        raise HTTPException(status_code=409, detail="run the analysis first")
+    summary = json.loads((rd / "summary.json").read_text())
+    scale = summary["analysis"]["scale"]
+    tracks = pd.read_parquet(rd / "tracks.parquet")
+    pos = pd.read_parquet(rd / "positions.parquet").set_index("sample_index")
+    frames, next_t = [], 0.0
+    for si, g in tracks.groupby("sample_index"):
+        t = float(g["t"].iloc[0])
+        if t + 1e-6 < next_t:
+            continue
+        next_t = t + every_s
+        target = pos.loc[si, "track_id"] if si in pos.index else None
+        people = []
+        for r in g.itertuples():
+            p = {
+                "id": f"T{int(r.track_id)}",
+                "bbox": [round(v / scale, 1) for v in (r.x1, r.y1, r.x2, r.y2)],
+                "ground_contact": None,
+            }
+            if target is not None and not pd.isna(target) and int(target) == int(r.track_id):
+                row = pos.loc[si]
+                if pd.notna(row["img_x"]):
+                    p["ground_contact"] = [round(row["img_x"] / scale, 1), round(row["img_y"] / scale, 1)]
+            people.append(p)
+        frames.append({"t": round(t, 3), "people": people, "reviewed": False})
+    reviewed = db.scalars(
+        select(StrokeEvent).where(StrokeEvent.session_id == s.id, StrokeEvent.review_status == "confirmed")
+    ).all()
+    seed = summary["quality"].get("seed_track")
+    return {
+        "format": FORMAT,
+        "source": "pre-annotation",
+        "warning": "machine-generated from this session's own analysis; correct every box, identity and point "
+        "(and set reviewed=true) before using it as ground truth, otherwise the evaluation is circular",
+        "target_id": f"T{seed}" if seed is not None else None,
+        "frames": frames,
+        "calibration_points": [],
+        "court_positions": [],
+        "strokes": [{"t": e.t, "shot_type": e.label_shot_type, "stroke_side": e.label_stroke_side} for e in reviewed],
+    }
+
+
 @router.get("/sessions/{session_id}/evaluation", summary="Evaluate the latest analysis against the annotations")
 def evaluate(
     s: VideoSession = Depends(get_session_or_404),

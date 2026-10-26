@@ -1,0 +1,1222 @@
+[
+ {
+  "scenario": "baseline-view, manual calibration",
+  "mode": "balanced",
+  "fps": 15.0,
+  "duration_s": 40.0,
+  "calibration": {
+   "method": "manual",
+   "grid_error_mean_m": 0.03814536733302369,
+   "grid_error_max_m": 0.10661467343273515,
+   "fit_seconds": 0.0019996166229248047
+  },
+  "tracking": {
+   "mota": 0.98125,
+   "idf1": 0.9905362776025236,
+   "id_switches": 0,
+   "tp": 157,
+   "fp": 0,
+   "fn": 3,
+   "mean_fragments_per_track": 2.5,
+   "mean_longest_run_share": 0.6125,
+   "iou_threshold": 0.5,
+   "note": "computed on the annotated frames only; with sparse annotation an ID switch between two annotated frames counts once"
+  },
+  "target": {
+   "frames": 80,
+   "correct_share": 0.9875,
+   "wrong_person_share": 0.0,
+   "missing_share": 0.0125
+  },
+  "position": {
+   "filtered": {
+    "n": 80,
+    "missing_rate": 0.0,
+    "mae_m": 0.05853188114179884,
+    "median_m": 0.05250423255359994,
+    "p90_m": 0.09130136634565424,
+    "rmse_m": 0.06668191134057098,
+    "mae_x_m": 0.02317054382757781,
+    "mae_y_m": 0.04859472061509544
+   },
+   "raw": {
+    "n": 79,
+    "missing_rate": 0.012499999999999956,
+    "mae_m": 0.04639981908091924,
+    "median_m": 0.044896132115995496,
+    "p90_m": 0.07529175352077272,
+    "rmse_m": 0.05203822847496725,
+    "mae_x_m": 0.011188822192476001,
+    "mae_y_m": 0.043497453288302367
+   },
+   "by_source": {
+    "pose_feet": 586,
+    "none": 14
+   }
+  },
+  "metrics_vs_truth": {
+   "distance_est_m": 56.5557880214604,
+   "distance_true_m": 57.9304385525988,
+   "distance_true_at_sample_rate_m": 55.96246786145784,
+   "distance_true_observed_m": 57.927875351475265,
+   "distance_error_observed_pct": -2.3686132482673914,
+   "distance_error_pct": -2.3729330650419045,
+   "mean_speed_est": 1.39976597684872,
+   "mean_speed_true": 1.3992999282351706,
+   "max_speed_est": 4.567046075855018,
+   "max_speed_true": 4.394624031477233,
+   "zone_share_mae_pct_points": 0.14777777777777779
+  },
+  "strokes": {
+   "events": {
+    "precision": 0.8888888888888888,
+    "recall": 0.8,
+    "f1": 0.8421052631578948,
+    "tp": 8,
+    "fp": 1,
+    "fn": 2,
+    "tolerance_s": 0.25,
+    "mean_abs_offset_s": 0.09962499999999863
+   },
+   "stroke_side": {
+    "n": 8,
+    "macro_f1": 0.08333333333333333,
+    "accuracy": 0.125,
+    "confusion_matrix": {
+     "labels": [
+      "backhand",
+      "forehand",
+      "uncertain"
+     ],
+     "matrix": [
+      [
+       0,
+       2,
+       1
+      ],
+      [
+       2,
+       1,
+       2
+      ],
+      [
+       0,
+       0,
+       0
+      ]
+     ]
+    }
+   },
+   "shot_type_coarse": {
+    "n": 8,
+    "macro_f1": 1.0,
+    "accuracy": 1.0,
+    "confusion_matrix": {
+     "labels": [
+      "drive",
+      "overhead"
+     ],
+     "matrix": [
+      [
+       5,
+       0
+      ],
+      [
+       0,
+       3
+      ]
+     ]
+    }
+   },
+   "note": "shot types compared at coarse level (overhead / drive / net / lift) because the heuristics do not separate smash, clear and drop"
+  },
+  "quality": {
+   "target_coverage_pct": 97.66666666666667,
+   "identity_links": 0,
+   "possible_id_switches": 0,
+   "tracking_gaps": 0
+  },
+  "timings_s": {
+   "validating": 0.0692903995513916,
+   "calibrating": 0.0010030269622802734,
+   "detecting": 0.15472006797790527,
+   "tracking": 0.07203412055969238,
+   "pose": 0.01899886131286621,
+   "analyzing": 0.09367108345031738,
+   "rendering": 0.8696811199188232,
+   "total": 1.2793986797332764
+  }
+ },
+ {
+  "scenario": "baseline-view, fast player",
+  "mode": "balanced",
+  "fps": 15.0,
+  "duration_s": 40.0,
+  "calibration": {
+   "method": "manual",
+   "grid_error_mean_m": 0.04231675061442288,
+   "grid_error_max_m": 0.1289052409022692,
+   "fit_seconds": 0.0009961128234863281
+  },
+  "tracking": {
+   "mota": 0.98125,
+   "idf1": 0.9905362776025236,
+   "id_switches": 0,
+   "tp": 157,
+   "fp": 0,
+   "fn": 3,
+   "mean_fragments_per_track": 2.5,
+   "mean_longest_run_share": 0.6125,
+   "iou_threshold": 0.5,
+   "note": "computed on the annotated frames only; with sparse annotation an ID switch between two annotated frames counts once"
+  },
+  "target": {
+   "frames": 80,
+   "correct_share": 0.9875,
+   "wrong_person_share": 0.0,
+   "missing_share": 0.0125
+  },
+  "position": {
+   "filtered": {
+    "n": 80,
+    "missing_rate": 0.0,
+    "mae_m": 0.06485474120102147,
+    "median_m": 0.054190384214647856,
+    "p90_m": 0.11402126946840381,
+    "rmse_m": 0.0743956954604943,
+    "mae_x_m": 0.033147780530879134,
+    "mae_y_m": 0.04960289376950114
+   },
+   "raw": {
+    "n": 79,
+    "missing_rate": 0.012499999999999956,
+    "mae_m": 0.045358485871092535,
+    "median_m": 0.04594827980888167,
+    "p90_m": 0.06527090555968101,
+    "rmse_m": 0.04830361862759304,
+    "mae_x_m": 0.022372012483910714,
+    "mae_y_m": 0.03620938590200933
+   },
+   "by_source": {
+    "pose_feet": 586,
+    "none": 14
+   }
+  },
+  "metrics_vs_truth": {
+   "distance_est_m": 75.25050924419273,
+   "distance_true_m": 76.7065843362011,
+   "distance_true_at_sample_rate_m": 74.8590323160257,
+   "distance_true_observed_m": 76.7006379087023,
+   "distance_error_observed_pct": -1.8906344250170164,
+   "distance_error_pct": -1.8982400332499128,
+   "mean_speed_est": 1.8676520209547043,
+   "mean_speed_true": 1.869734903687644,
+   "max_speed_est": 6.046634536883525,
+   "max_speed_true": 5.8007543550319,
+   "zone_share_mae_pct_points": 0.18555555555555056
+  },
+  "strokes": {
+   "events": {
+    "precision": 1.0,
+    "recall": 0.9090909090909091,
+    "f1": 0.9523809523809523,
+    "tp": 10,
+    "fp": 0,
+    "fn": 1,
+    "tolerance_s": 0.25,
+    "mean_abs_offset_s": 0.0841999999999999
+   },
+   "stroke_side": {
+    "n": 10,
+    "macro_f1": 0.23076923076923078,
+    "accuracy": 0.3,
+    "confusion_matrix": {
+     "labels": [
+      "forehand",
+      "uncertain"
+     ],
+     "matrix": [
+      [
+       3,
+       7
+      ],
+      [
+       0,
+       0
+      ]
+     ]
+    }
+   },
+   "shot_type_coarse": {
+    "n": 10,
+    "macro_f1": 0.25,
+    "accuracy": 0.8,
+    "confusion_matrix": {
+     "labels": [
+      "drive",
+      "lift",
+      "net",
+      "overhead"
+     ],
+     "matrix": [
+      [
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       8
+      ]
+     ]
+    }
+   },
+   "note": "shot types compared at coarse level (overhead / drive / net / lift) because the heuristics do not separate smash, clear and drop"
+  },
+  "quality": {
+   "target_coverage_pct": 97.66666666666667,
+   "identity_links": 0,
+   "possible_id_switches": 0,
+   "tracking_gaps": 0
+  },
+  "timings_s": {
+   "validating": 0.055941104888916016,
+   "calibrating": 0.00099945068359375,
+   "detecting": 0.04099917411804199,
+   "tracking": 0.07187676429748535,
+   "pose": 0.013999462127685547,
+   "analyzing": 0.04307889938354492,
+   "rendering": 0.43283557891845703,
+   "total": 0.6597304344177246
+  }
+ },
+ {
+  "scenario": "baseline-view, 2 occlusions of the target",
+  "mode": "balanced",
+  "fps": 15.0,
+  "duration_s": 40.0,
+  "calibration": {
+   "method": "manual",
+   "grid_error_mean_m": 0.03129710413451438,
+   "grid_error_max_m": 0.10859607259736331,
+   "fit_seconds": 0.0020029544830322266
+  },
+  "tracking": {
+   "mota": 0.875,
+   "idf1": 0.7019867549668874,
+   "id_switches": 2,
+   "tp": 142,
+   "fp": 0,
+   "fn": 18,
+   "mean_fragments_per_track": 5.5,
+   "mean_longest_run_share": 0.28125,
+   "iou_threshold": 0.5,
+   "note": "computed on the annotated frames only; with sparse annotation an ID switch between two annotated frames counts once"
+  },
+  "target": {
+   "frames": 80,
+   "correct_share": 0.8375,
+   "wrong_person_share": 0.0,
+   "missing_share": 0.1625
+  },
+  "position": {
+   "filtered": {
+    "n": 71,
+    "missing_rate": 0.11250000000000004,
+    "mae_m": 0.048560556637009436,
+    "median_m": 0.041416477827842045,
+    "p90_m": 0.08812613233609067,
+    "rmse_m": 0.05668874092465821,
+    "mae_x_m": 0.020675718638116083,
+    "mae_y_m": 0.04020289756017444
+   },
+   "raw": {
+    "n": 67,
+    "missing_rate": 0.16249999999999998,
+    "mae_m": 0.035744096021250026,
+    "median_m": 0.03407766429360708,
+    "p90_m": 0.06092263393430888,
+    "rmse_m": 0.040667914292276126,
+    "mae_x_m": 0.011434983692275962,
+    "mae_y_m": 0.03172323988247586
+   },
+   "by_source": {
+    "pose_feet": 531,
+    "none": 69
+   }
+  },
+  "metrics_vs_truth": {
+   "distance_est_m": 57.386748490465564,
+   "distance_true_m": 66.2816833597285,
+   "distance_true_at_sample_rate_m": 64.858766460839,
+   "distance_true_observed_m": 58.584212165933245,
+   "distance_error_observed_pct": -2.044004060472809,
+   "distance_error_pct": -13.419898859520117,
+   "mean_speed_est": 1.5788471148502232,
+   "mean_speed_true": 1.6187786248603009,
+   "max_speed_est": 4.622512847074028,
+   "max_speed_true": 4.551005458115161,
+   "zone_share_mae_pct_points": 0.4662453776466492
+  },
+  "strokes": {
+   "events": {
+    "precision": 0.5714285714285714,
+    "recall": 0.4,
+    "f1": 0.47058823529411764,
+    "tp": 4,
+    "fp": 3,
+    "fn": 6,
+    "tolerance_s": 0.25,
+    "mean_abs_offset_s": 0.0892500000000005
+   },
+   "stroke_side": {
+    "n": 4,
+    "macro_f1": 0.42857142857142855,
+    "accuracy": 0.75,
+    "confusion_matrix": {
+     "labels": [
+      "forehand",
+      "uncertain"
+     ],
+     "matrix": [
+      [
+       3,
+       1
+      ],
+      [
+       0,
+       0
+      ]
+     ]
+    }
+   },
+   "shot_type_coarse": {
+    "n": 4,
+    "macro_f1": 0.3333333333333333,
+    "accuracy": 0.5,
+    "confusion_matrix": {
+     "labels": [
+      "drive",
+      "lift",
+      "overhead"
+     ],
+     "matrix": [
+      [
+       0,
+       0,
+       0
+      ],
+      [
+       2,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       2
+      ]
+     ]
+    }
+   },
+   "note": "shot types compared at coarse level (overhead / drive / net / lift) because the heuristics do not separate smash, clear and drop"
+  },
+  "quality": {
+   "target_coverage_pct": 88.5,
+   "identity_links": 2,
+   "possible_id_switches": 0,
+   "tracking_gaps": 2
+  },
+  "timings_s": {
+   "validating": 0.06352400779724121,
+   "calibrating": 0.0,
+   "detecting": 0.040587663650512695,
+   "tracking": 0.08204221725463867,
+   "pose": 0.017999887466430664,
+   "analyzing": 0.046083688735961914,
+   "rendering": 0.4542255401611328,
+   "total": 0.704463005065918
+  }
+ },
+ {
+  "scenario": "baseline-view, automatic calibration",
+  "mode": "balanced",
+  "fps": 15.0,
+  "duration_s": 40.0,
+  "calibration": {
+   "method": "auto",
+   "grid_error_mean_m": 0.05608446058056413,
+   "grid_error_max_m": 0.12224507278084462,
+   "fit_seconds": 1.5036394596099854
+  },
+  "tracking": {
+   "mota": 0.98125,
+   "idf1": 0.9905362776025236,
+   "id_switches": 0,
+   "tp": 157,
+   "fp": 0,
+   "fn": 3,
+   "mean_fragments_per_track": 2.5,
+   "mean_longest_run_share": 0.6125,
+   "iou_threshold": 0.5,
+   "note": "computed on the annotated frames only; with sparse annotation an ID switch between two annotated frames counts once"
+  },
+  "target": {
+   "frames": 80,
+   "correct_share": 0.9875,
+   "wrong_person_share": 0.0,
+   "missing_share": 0.0125
+  },
+  "position": {
+   "filtered": {
+    "n": 80,
+    "missing_rate": 0.0,
+    "mae_m": 0.06466955883353731,
+    "median_m": 0.061312676845956204,
+    "p90_m": 0.11014893052943485,
+    "rmse_m": 0.07145847454104856,
+    "mae_x_m": 0.021659534780499076,
+    "mae_y_m": 0.056744578911975305
+   },
+   "raw": {
+    "n": 79,
+    "missing_rate": 0.012499999999999956,
+    "mae_m": 0.05440269618073998,
+    "median_m": 0.05140281998836228,
+    "p90_m": 0.0824551459862739,
+    "rmse_m": 0.058329592304755734,
+    "mae_x_m": 0.012689564769102017,
+    "mae_y_m": 0.05187546523105678
+   },
+   "by_source": {
+    "pose_feet": 586,
+    "none": 14
+   }
+  },
+  "metrics_vs_truth": {
+   "distance_est_m": 55.52065848247214,
+   "distance_true_m": 56.61769415520577,
+   "distance_true_at_sample_rate_m": 54.540761600109214,
+   "distance_true_observed_m": 56.61074793321108,
+   "distance_error_observed_pct": -1.9255874379632216,
+   "distance_error_pct": -1.937619836170522,
+   "mean_speed_est": 1.3733359002880203,
+   "mean_speed_true": 1.3661668867330863,
+   "max_speed_est": 4.4711893429832354,
+   "max_speed_true": 4.302017973715665,
+   "zone_share_mae_pct_points": 0.18555555555555592
+  },
+  "strokes": {
+   "events": {
+    "precision": 0.8888888888888888,
+    "recall": 0.8888888888888888,
+    "f1": 0.8888888888888888,
+    "tp": 8,
+    "fp": 1,
+    "fn": 1,
+    "tolerance_s": 0.25,
+    "mean_abs_offset_s": 0.07150000000000023
+   },
+   "stroke_side": {
+    "n": 8,
+    "macro_f1": 0.3333333333333333,
+    "accuracy": 0.5,
+    "confusion_matrix": {
+     "labels": [
+      "forehand",
+      "uncertain"
+     ],
+     "matrix": [
+      [
+       4,
+       4
+      ],
+      [
+       0,
+       0
+      ]
+     ]
+    }
+   },
+   "shot_type_coarse": {
+    "n": 8,
+    "macro_f1": 1.0,
+    "accuracy": 1.0,
+    "confusion_matrix": {
+     "labels": [
+      "drive",
+      "overhead"
+     ],
+     "matrix": [
+      [
+       2,
+       0
+      ],
+      [
+       0,
+       6
+      ]
+     ]
+    }
+   },
+   "note": "shot types compared at coarse level (overhead / drive / net / lift) because the heuristics do not separate smash, clear and drop"
+  },
+  "quality": {
+   "target_coverage_pct": 97.66666666666667,
+   "identity_links": 0,
+   "possible_id_switches": 0,
+   "tracking_gaps": 0
+  },
+  "timings_s": {
+   "validating": 0.05828666687011719,
+   "calibrating": 0.0,
+   "detecting": 0.045044660568237305,
+   "tracking": 0.09524011611938477,
+   "pose": 0.01999664306640625,
+   "analyzing": 0.05414605140686035,
+   "rendering": 0.5503337383270264,
+   "total": 0.8230478763580322
+  }
+ },
+ {
+  "scenario": "corner-view, manual calibration",
+  "mode": "balanced",
+  "fps": 15.0,
+  "duration_s": 40.0,
+  "calibration": {
+   "method": "manual",
+   "grid_error_mean_m": 0.04628883906820024,
+   "grid_error_max_m": 0.12391273276133057,
+   "fit_seconds": 0.0020012855529785156
+  },
+  "tracking": {
+   "mota": 0.98125,
+   "idf1": 0.9905362776025236,
+   "id_switches": 0,
+   "tp": 157,
+   "fp": 0,
+   "fn": 3,
+   "mean_fragments_per_track": 2.5,
+   "mean_longest_run_share": 0.6125,
+   "iou_threshold": 0.5,
+   "note": "computed on the annotated frames only; with sparse annotation an ID switch between two annotated frames counts once"
+  },
+  "target": {
+   "frames": 80,
+   "correct_share": 0.9875,
+   "wrong_person_share": 0.0,
+   "missing_share": 0.0125
+  },
+  "position": {
+   "filtered": {
+    "n": 80,
+    "missing_rate": 0.0,
+    "mae_m": 0.04542375427329913,
+    "median_m": 0.03512882843847288,
+    "p90_m": 0.08660096409852795,
+    "rmse_m": 0.05368814203556132,
+    "mae_x_m": 0.026076126377455423,
+    "mae_y_m": 0.03401830107880624
+   },
+   "raw": {
+    "n": 79,
+    "missing_rate": 0.012499999999999956,
+    "mae_m": 0.03344731448631555,
+    "median_m": 0.03077442607062332,
+    "p90_m": 0.05352040000589934,
+    "rmse_m": 0.03683554732209944,
+    "mae_x_m": 0.019728316729685762,
+    "mae_y_m": 0.024228101363664118
+   },
+   "by_source": {
+    "pose_feet": 586,
+    "none": 14
+   }
+  },
+  "metrics_vs_truth": {
+   "distance_est_m": 62.978816593703826,
+   "distance_true_m": 64.0337139419059,
+   "distance_true_at_sample_rate_m": 62.45198561202507,
+   "distance_true_observed_m": 64.00702162091288,
+   "distance_error_observed_pct": -1.6063941129751163,
+   "distance_error_pct": -1.6474092837393801,
+   "mean_speed_est": 1.5609838428070706,
+   "mean_speed_true": 1.56132089550481,
+   "max_speed_est": 4.4584692043389875,
+   "max_speed_true": 4.366298209645345,
+   "zone_share_mae_pct_points": 0.3316666666666677
+  },
+  "strokes": {
+   "events": {
+    "precision": 0.7,
+    "recall": 0.7,
+    "f1": 0.7,
+    "tp": 7,
+    "fp": 3,
+    "fn": 3,
+    "tolerance_s": 0.25,
+    "mean_abs_offset_s": 0.08714285714285795
+   },
+   "stroke_side": {
+    "n": 7,
+    "macro_f1": 0.08333333333333333,
+    "accuracy": 0.14285714285714285,
+    "confusion_matrix": {
+     "labels": [
+      "backhand",
+      "forehand",
+      "uncertain"
+     ],
+     "matrix": [
+      [
+       0,
+       0,
+       0
+      ],
+      [
+       1,
+       1,
+       5
+      ],
+      [
+       0,
+       0,
+       0
+      ]
+     ]
+    }
+   },
+   "shot_type_coarse": {
+    "n": 7,
+    "macro_f1": 0.5,
+    "accuracy": 0.8571428571428571,
+    "confusion_matrix": {
+     "labels": [
+      "drive",
+      "lift",
+      "net",
+      "overhead"
+     ],
+     "matrix": [
+      [
+       0,
+       0,
+       0,
+       0
+      ],
+      [
+       1,
+       0,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       1,
+       0
+      ],
+      [
+       0,
+       0,
+       0,
+       5
+      ]
+     ]
+    }
+   },
+   "note": "shot types compared at coarse level (overhead / drive / net / lift) because the heuristics do not separate smash, clear and drop"
+  },
+  "quality": {
+   "target_coverage_pct": 97.66666666666667,
+   "identity_links": 0,
+   "possible_id_switches": 0,
+   "tracking_gaps": 0
+  },
+  "timings_s": {
+   "validating": 0.06052064895629883,
+   "calibrating": 0.0,
+   "detecting": 0.04096055030822754,
+   "tracking": 0.07152056694030762,
+   "pose": 0.01599907875061035,
+   "analyzing": 0.05353403091430664,
+   "rendering": 0.4063529968261719,
+   "total": 0.6488878726959229
+  }
+ },
+ {
+  "scenario": "baseline-view, sloppy clicks (4 px)",
+  "mode": "balanced",
+  "fps": 15.0,
+  "duration_s": 40.0,
+  "calibration": {
+   "method": "manual",
+   "grid_error_mean_m": 0.053593743606272046,
+   "grid_error_max_m": 0.14380520847995304,
+   "fit_seconds": 0.0010008811950683594
+  },
+  "tracking": {
+   "mota": 0.98125,
+   "idf1": 0.9905362776025236,
+   "id_switches": 0,
+   "tp": 157,
+   "fp": 0,
+   "fn": 3,
+   "mean_fragments_per_track": 2.5,
+   "mean_longest_run_share": 0.6125,
+   "iou_threshold": 0.5,
+   "note": "computed on the annotated frames only; with sparse annotation an ID switch between two annotated frames counts once"
+  },
+  "target": {
+   "frames": 80,
+   "correct_share": 0.9875,
+   "wrong_person_share": 0.0,
+   "missing_share": 0.0125
+  },
+  "position": {
+   "filtered": {
+    "n": 80,
+    "missing_rate": 0.0,
+    "mae_m": 0.05502289965612839,
+    "median_m": 0.047476283695062946,
+    "p90_m": 0.10637528793173694,
+    "rmse_m": 0.06414764339107593,
+    "mae_x_m": 0.02832810671119209,
+    "mae_y_m": 0.04344322472073438
+   },
+   "raw": {
+    "n": 79,
+    "missing_rate": 0.012499999999999956,
+    "mae_m": 0.04821675829515513,
+    "median_m": 0.043238980444994336,
+    "p90_m": 0.08647282527868361,
+    "rmse_m": 0.05515720369184936,
+    "mae_x_m": 0.02119149022551881,
+    "mae_y_m": 0.04094607529769727
+   },
+   "by_source": {
+    "pose_feet": 586,
+    "none": 14
+   }
+  },
+  "metrics_vs_truth": {
+   "distance_est_m": 60.181184812040804,
+   "distance_true_m": 61.60115742255608,
+   "distance_true_at_sample_rate_m": 59.84455445902875,
+   "distance_true_observed_m": 61.59556010176843,
+   "distance_error_observed_pct": -2.2962292856673217,
+   "distance_error_pct": -2.305107030335329,
+   "mean_speed_est": 1.4928692625248738,
+   "mean_speed_true": 1.4962450434844583,
+   "max_speed_est": 4.439297433503777,
+   "max_speed_true": 4.257820250192481,
+   "zone_share_mae_pct_points": 0.18388888888889052
+  },
+  "strokes": {
+   "events": {
+    "precision": 0.4,
+    "recall": 0.4,
+    "f1": 0.4000000000000001,
+    "tp": 4,
+    "fp": 6,
+    "fn": 6,
+    "tolerance_s": 0.25,
+    "mean_abs_offset_s": 0.06875000000000053
+   },
+   "stroke_side": {
+    "n": 4,
+    "macro_f1": 0.26666666666666666,
+    "accuracy": 0.5,
+    "confusion_matrix": {
+     "labels": [
+      "backhand",
+      "forehand",
+      "uncertain"
+     ],
+     "matrix": [
+      [
+       0,
+       0,
+       1
+      ],
+      [
+       0,
+       2,
+       1
+      ],
+      [
+       0,
+       0,
+       0
+      ]
+     ]
+    }
+   },
+   "shot_type_coarse": {
+    "n": 4,
+    "macro_f1": 0.6,
+    "accuracy": 0.75,
+    "confusion_matrix": {
+     "labels": [
+      "drive",
+      "lift",
+      "overhead"
+     ],
+     "matrix": [
+      [
+       2,
+       0,
+       0
+      ],
+      [
+       1,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       1
+      ]
+     ]
+    }
+   },
+   "note": "shot types compared at coarse level (overhead / drive / net / lift) because the heuristics do not separate smash, clear and drop"
+  },
+  "quality": {
+   "target_coverage_pct": 97.66666666666667,
+   "identity_links": 0,
+   "possible_id_switches": 0,
+   "tracking_gaps": 0
+  },
+  "timings_s": {
+   "validating": 0.052521467208862305,
+   "calibrating": 0.0,
+   "detecting": 0.03952383995056152,
+   "tracking": 0.07095932960510254,
+   "pose": 0.014106988906860352,
+   "analyzing": 0.04100227355957031,
+   "rendering": 0.40938735008239746,
+   "total": 0.6275012493133545
+  }
+ },
+ {
+  "scenario": "baseline-view, fast mode (10 fps)",
+  "mode": "fast",
+  "fps": 10.0,
+  "duration_s": 40.0,
+  "calibration": {
+   "method": "manual",
+   "grid_error_mean_m": 0.05424229197626545,
+   "grid_error_max_m": 0.16432691785129053,
+   "fit_seconds": 0.0009999275207519531
+  },
+  "tracking": {
+   "mota": 0.95625,
+   "idf1": 0.780952380952381,
+   "id_switches": 2,
+   "tp": 155,
+   "fp": 0,
+   "fn": 5,
+   "mean_fragments_per_track": 3.5,
+   "mean_longest_run_share": 0.8,
+   "iou_threshold": 0.5,
+   "note": "computed on the annotated frames only; with sparse annotation an ID switch between two annotated frames counts once"
+  },
+  "target": {
+   "frames": 80,
+   "correct_share": 0.95,
+   "wrong_person_share": 0.0,
+   "missing_share": 0.05
+  },
+  "position": {
+   "filtered": {
+    "n": 80,
+    "missing_rate": 0.0,
+    "mae_m": 0.035863218532350395,
+    "median_m": 0.030438997283403567,
+    "p90_m": 0.06767306434593208,
+    "rmse_m": 0.0411576537185086,
+    "mae_x_m": 0.01659208796231177,
+    "mae_y_m": 0.028553326968250376
+   },
+   "raw": {
+    "n": 76,
+    "missing_rate": 0.050000000000000044,
+    "mae_m": 0.04447481438850675,
+    "median_m": 0.03974707768353648,
+    "p90_m": 0.08020557119679991,
+    "rmse_m": 0.05323466089048083,
+    "mae_x_m": 0.019111636136983183,
+    "mae_y_m": 0.03598562707134558
+   },
+   "by_source": {
+    "pose_feet": 390,
+    "none": 10
+   }
+  },
+  "metrics_vs_truth": {
+   "distance_est_m": 63.28917171946009,
+   "distance_true_m": 63.820989980943125,
+   "distance_true_at_sample_rate_m": 61.573386870659874,
+   "distance_true_observed_m": 63.76052309857853,
+   "distance_error_observed_pct": -0.7392526852229456,
+   "distance_error_pct": -0.8332967909802595,
+   "mean_speed_est": 1.5578322574571992,
+   "mean_speed_true": 1.5548725768039018,
+   "max_speed_est": 4.466606385158284,
+   "max_speed_true": 4.387017648902168,
+   "zone_share_mae_pct_points": 0.1111111111111126
+  },
+  "strokes": {
+   "events": {
+    "precision": 0.875,
+    "recall": 0.7,
+    "f1": 0.7777777777777777,
+    "tp": 7,
+    "fp": 1,
+    "fn": 3,
+    "tolerance_s": 0.25,
+    "mean_abs_offset_s": 0.09414285714285715
+   },
+   "stroke_side": {
+    "n": 7,
+    "macro_f1": 0.4444444444444444,
+    "accuracy": 0.5714285714285714,
+    "confusion_matrix": {
+     "labels": [
+      "backhand",
+      "forehand",
+      "uncertain"
+     ],
+     "matrix": [
+      [
+       1,
+       0,
+       0
+      ],
+      [
+       1,
+       3,
+       2
+      ],
+      [
+       0,
+       0,
+       0
+      ]
+     ]
+    }
+   },
+   "shot_type_coarse": {
+    "n": 7,
+    "macro_f1": 0.41904761904761906,
+    "accuracy": 0.5714285714285714,
+    "confusion_matrix": {
+     "labels": [
+      "drive",
+      "lift",
+      "overhead"
+     ],
+     "matrix": [
+      [
+       1,
+       0,
+       1
+      ],
+      [
+       2,
+       0,
+       0
+      ],
+      [
+       0,
+       0,
+       3
+      ]
+     ]
+    }
+   },
+   "note": "shot types compared at coarse level (overhead / drive / net / lift) because the heuristics do not separate smash, clear and drop"
+  },
+  "quality": {
+   "target_coverage_pct": 97.5,
+   "identity_links": 1,
+   "possible_id_switches": 0,
+   "tracking_gaps": 0
+  },
+  "timings_s": {
+   "validating": 0.05452442169189453,
+   "calibrating": 0.0,
+   "detecting": 0.04229569435119629,
+   "tracking": 0.06411051750183105,
+   "pose": 0.017995834350585938,
+   "analyzing": 0.05569791793823242,
+   "rendering": 0.42180538177490234,
+   "total": 0.6564297676086426
+  }
+ },
+ {
+  "scenario": "baseline-view, accurate mode (30 fps)",
+  "mode": "accurate",
+  "fps": 30.0,
+  "duration_s": 40.0,
+  "calibration": {
+   "method": "manual",
+   "grid_error_mean_m": 0.05451468846216474,
+   "grid_error_max_m": 0.10647552885710548,
+   "fit_seconds": 0.0009970664978027344
+  },
+  "tracking": {
+   "mota": 0.9625,
+   "idf1": 0.9808917197452229,
+   "id_switches": 0,
+   "tp": 154,
+   "fp": 0,
+   "fn": 6,
+   "mean_fragments_per_track": 3.5,
+   "mean_longest_run_share": 0.58125,
+   "iou_threshold": 0.5,
+   "note": "computed on the annotated frames only; with sparse annotation an ID switch between two annotated frames counts once"
+  },
+  "target": {
+   "frames": 80,
+   "correct_share": 0.95,
+   "wrong_person_share": 0.0,
+   "missing_share": 0.05
+  },
+  "position": {
+   "filtered": {
+    "n": 80,
+    "missing_rate": 0.0,
+    "mae_m": 0.07199131652580919,
+    "median_m": 0.07353602653883222,
+    "p90_m": 0.09661233891258247,
+    "rmse_m": 0.0760830707889926,
+    "mae_x_m": 0.02491066167069627,
+    "mae_y_m": 0.06422898393886631
+   },
+   "raw": {
+    "n": 76,
+    "missing_rate": 0.050000000000000044,
+    "mae_m": 0.07325510794064066,
+    "median_m": 0.0717619398270801,
+    "p90_m": 0.09965368435141125,
+    "rmse_m": 0.07618359380421652,
+    "mae_x_m": 0.024192139007087856,
+    "mae_y_m": 0.06681040257042517
+   },
+   "by_source": {
+    "pose_feet": 1166,
+    "none": 34
+   }
+  },
+  "metrics_vs_truth": {
+   "distance_est_m": 62.94719706059455,
+   "distance_true_m": 64.13939727429994,
+   "distance_true_at_sample_rate_m": 63.09365642344797,
+   "distance_true_observed_m": 64.13939727429994,
+   "distance_error_observed_pct": -1.8587642921039647,
+   "distance_error_pct": -1.8587642921039647,
+   "mean_speed_est": 1.5674907835392382,
+   "mean_speed_true": 1.5622172759560258,
+   "max_speed_est": 4.400445467623016,
+   "max_speed_true": 4.406372615354109,
+   "zone_share_mae_pct_points": 0.14666666666667397
+  },
+  "strokes": {
+   "events": {
+    "precision": 0.7272727272727273,
+    "recall": 0.8,
+    "f1": 0.761904761904762,
+    "tp": 8,
+    "fp": 3,
+    "fn": 2,
+    "tolerance_s": 0.25,
+    "mean_abs_offset_s": 0.08937499999999968
+   },
+   "stroke_side": {
+    "n": 8,
+    "macro_f1": 0.2222222222222222,
+    "accuracy": 0.5,
+    "confusion_matrix": {
+     "labels": [
+      "backhand",
+      "forehand",
+      "uncertain"
+     ],
+     "matrix": [
+      [
+       0,
+       1,
+       0
+      ],
+      [
+       0,
+       4,
+       3
+      ],
+      [
+       0,
+       0,
+       0
+      ]
+     ]
+    }
+   },
+   "shot_type_coarse": {
+    "n": 8,
+    "macro_f1": 1.0,
+    "accuracy": 1.0,
+    "confusion_matrix": {
+     "labels": [
+      "drive",
+      "overhead"
+     ],
+     "matrix": [
+      [
+       1,
+       0
+      ],
+      [
+       0,
+       7
+      ]
+     ]
+    }
+   },
+   "note": "shot types compared at coarse level (overhead / drive / net / lift) because the heuristics do not separate smash, clear and drop"
+  },
+  "quality": {
+   "target_coverage_pct": 97.16666666666667,
+   "identity_links": 0,
+   "possible_id_switches": 4,
+   "tracking_gaps": 0
+  },
+  "timings_s": {
+   "validating": 0.055020809173583984,
+   "calibrating": 0.0010035037994384766,
+   "detecting": 0.04698824882507324,
+   "tracking": 0.16364550590515137,
+   "pose": 0.018004179000854492,
+   "analyzing": 0.0623781681060791,
+   "rendering": 0.46733570098876953,
+   "total": 0.8143761157989502
+  }
+ }
+]

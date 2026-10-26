@@ -207,7 +207,9 @@ def evaluate_session(
 
     gt_strokes = annotations.get("strokes") or []
     if gt_strokes and strokes is not None:
-        pred = [s for s in strokes if s.get("review_status") != "rejected" and s.get("source") == "detected"]
+        # Score the detector itself: every machine-detected event, regardless of later human review
+        # (using review decisions here would leak the ground truth into the predictions).
+        pred = [s for s in strokes if s.get("source") == "detected"]
         ev = event_detection_prf([s["t"] for s in gt_strokes], [s["t"] for s in pred], stroke_tolerance_s)
         matches = ev.pop("matches")
         gts = sorted(gt_strokes, key=lambda s: s["t"])

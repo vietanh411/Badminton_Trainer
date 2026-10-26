@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.webm binary
+*.mp4 binary
+*.task binary
+*.tflite binary
+*.pt binary
