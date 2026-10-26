@@ -55,6 +55,7 @@ def render_annotated_clip(
     lines = court_polylines(np.linalg.inv(H_analysis)) if H_analysis is not None else []
     writer = path = None
     trail: list[tuple[int, int]] = []
+    last_shot = None
     try:
         for frame in iter_frames(video, target_fps=analysis_fps, max_width=max_width, cancel=cancel):
             if frame.timestamp_s < start - 1e-6:
@@ -83,6 +84,9 @@ def render_annotated_clip(
                     1,
                     cv2.LINE_AA,
                 )
+            if i is not None and "shot" in pos and pos.at[i, "shot"] != last_shot:
+                trail = []  # never draw the trail across a video cut
+                last_shot = pos.at[i, "shot"]
             if i is not None:
                 xy = pose_xy[i]
                 vis = pose_vis[i]

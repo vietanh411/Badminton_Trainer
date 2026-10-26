@@ -147,3 +147,61 @@ def test_target_selection_must_match_someone():
     samples = pd.DataFrame({"sample_index": [0], "frame_index": [0], "t": [0.0]})
     with pytest.raises(TargetSelectionError):
         resolve_target(tracks, np.ones((1, HIST_DIM)) / HIST_DIM, samples, {"t": 0.0, "bbox": box(900, 600).tolist()})
+
+
+def test_split_tracks_at_identity_swap_but_not_at_far_side_jitter():
+    from vision.calibration.homography import fit_homography
+    from vision.synthetic.scene import court_keypoint_pixels, default_camera
+    from vision.tracking.target import split_tracks_at_jumps
+
+    ids = [
+        "near_baseline__left_doubles",
+        "near_baseline__right_doubles",
+        "far_baseline__left_doubles",
+        "far_baseline__right_doubles",
+        "near_short_service__left_singles",
+        "far_short_service__right_singles",
+    ]
+    cam = default_camera(1280, 720)
+    H = fit_homography(court_keypoint_pixels(cam, ids), point_ids=ids).H
+    rows = []
+    for k in range(20):  # near player whose id is handed to the far player at k = 10
+        if k < 10:
+            rows.append((k, k, k / 15, 1, *box(560, 560, 70, 200), 0.9))
+        else:
+            rows.append((k, k, k / 15, 1, *box(700, 240, 25, 70), 0.9))
+    rng = np.random.default_rng(0)
+    for k in range(20):  # far player with 3 px box jitter: large in depth, small in the image
+        cy = 240 + rng.normal(0, 3)
+        rows.append((k, k, k / 15, 2, *box(620, cy, 25, 70), 0.9))
+    tracks = _tracks_df(rows).assign(shot=0)
+    out, n = split_tracks_at_jumps(tracks, {0: H})
+    assert n == 1
+    assert out.loc[tracks["track_id"] == 2, "track_id"].nunique() == 1
+    t1 = out.loc[tracks["track_id"] == 1]
+    assert t1["track_id"].iloc[:10].nunique() == 1 and t1["track_id"].iloc[10:].nunique() == 1
+    assert t1["track_id"].iloc[0] != t1["track_id"].iloc[10]
+
+
+def test_cross_shot_reid_is_not_confused_by_fragments_of_the_same_player():
+    rows = []
+    # shot 0: target (id 1) + opponent (id 2); shot 1: target split into two fragments (3, 4) + opponent (5)
+    for k in range(30):
+        rows.append((k, k, k / 15, 1, *box(300, 400), 0.9, 0))
+        rows.append((k, k, k / 15, 2, *box(600, 150, 20, 60), 0.9, 0))
+    for k in range(30, 60):
+        tid = 3 if k < 45 else 4
+        rows.append((k, k, k / 15, tid, *box(500 if k < 45 else 200, 400), 0.9, 1))
+        rows.append((k, k, k / 15, 5, *box(650, 150, 20, 60), 0.9, 1))
+    tracks = pd.DataFrame(
+        rows, columns=["sample_index", "frame_index", "t", "track_id", "x1", "y1", "x2", "y2", "score", "shot"]
+    )
+    white, red = np.eye(HIST_DIM, dtype=np.float32)[0], np.eye(HIST_DIM, dtype=np.float32)[7]
+    app = np.where(tracks["track_id"].isin([1, 3, 4]).to_numpy()[:, None], white, red)
+    samples = pd.DataFrame(
+        {"sample_index": range(60), "frame_index": range(60), "t": np.arange(60) / 15, "shot": [0] * 30 + [1] * 30}
+    )
+    res = resolve_target(tracks, app, samples, {"t": 0.5, "bbox": box(300, 400).tolist()})
+    assert not any(e["type"] == "shot_target_uncertain" for e in res.events)
+    later = res.frames[res.frames["shot"] == 1]["track_id"].dropna().astype(int)
+    assert set(later) <= {3, 4} and 3 in set(later)

@@ -39,6 +39,7 @@ evaluation framework rather than unverifiable accuracy claims.
 | Court calibration | Manual landmark editor with live reprojection error (m and px), RANSAC, degeneracy checks; automatic court-line detection as an editable suggestion | ✅ tested (synthetic + negative real-photo checks) |
 | Detection & tracking | YOLO11 or MediaPipe EfficientDet person detection; ByteTrack re-implemented per job; optional BoT-SORT; court-region filtering | ✅ tested |
 | Target identity | Seed from the user's click, link fragments through occlusions with motion + appearance evidence, manual corrections, switch and gap flags | ✅ tested |
+| Edited footage (highlights) | Cut detection (pixel, local, histogram and tracker cues), tracker reset per shot, per-shot court-view check with automatic recalibration or exclusion, player re-identified across cuts by appearance; nothing connected across cuts | ✅ tested (synthetic edits + 38/38 cuts on a real highlight reel) |
 | Pose | MediaPipe Pose on the player crop, landmarks restored to frame coordinates, visibility kept, posture proxies | ✅ tested on real people |
 | Court position | Heel/toe foot-contact point → homography, box fallback, confidence per sample | ✅ tested |
 | Trajectory | Bounds, robust outliers, speed gate, short-gap interpolation only, Savitzky–Golay, raw kept alongside filtered | ✅ tested |
@@ -87,9 +88,9 @@ tracking-association, trajectory and metric layers, **not** YOLO/MediaPipe accur
 | Measure (8 scenarios) | Result |
 |---|---|
 | Court-mapping error after calibration (1.5–4 px click noise, or auto-detected) | 3.1–5.6 cm mean |
-| Player position error (filtered) | 3.6–7.2 cm MAE |
-| Distance covered, over observed time | 0.7–2.4 % below truth |
-| Mean speed | within 0.04 m/s |
+| Player position error (filtered) | 3.5–7.2 cm MAE |
+| Distance covered, over observed time | 2.6–4.1 % below truth |
+| Mean speed | within 0.05 m/s |
 | Target identity through scripted occlusions | 2/2 occlusions re-linked, 0 frames on the wrong person |
 
 **Performance** on a laptop CPU (Ryzen 7 5825U, no GPU), 1280×720 input
@@ -201,7 +202,7 @@ docker/ + docker-compose*.yml, .github/workflows/ci.yml
 
 ## Known limitations
 
-* One fixed camera: camera motion or zoom breaks the calibration.
+* One fixed camera per shot: camera motion during a shot breaks the calibration (edited footage with cuts is supported).
 * Feet must be visible for the best positions; the far-side player is small and noisier.
 * Pose angles are 2-D proxies; no medical or injury interpretation is offered.
 * Recovery/footwork values are movement proxies — the shuttle and shot timing are not tracked.

@@ -19,9 +19,11 @@ def test_constant_velocity_speed_and_distance():
     x = 1.0 + 1.5 * t  # 1.5 m/s along x
     y = np.full_like(t, 3.0)
     tr = traj_from(t, x, y)
-    assert tr["speed"].iloc[3:-3].to_numpy() == pytest.approx(1.5, abs=1e-6)
+    # The Kalman smoother starts from zero velocity, so allow a short start-up transient.
+    assert tr["speed"].iloc[8:-3].to_numpy() == pytest.approx(1.5, abs=0.01)
+    assert tr["speed"].iloc[3:-3].to_numpy() == pytest.approx(1.5, abs=0.05)
     m, _, _ = compute_movement_metrics(tr)
-    assert m["distance"]["total_m"] == pytest.approx(1.5 * (t[-1] - t[0]), rel=1e-6)
+    assert m["distance"]["total_m"] == pytest.approx(1.5 * (t[-1] - t[0]), rel=0.005)
 
 
 def test_square_path_distance():
@@ -36,9 +38,12 @@ def test_square_path_distance():
     pts.append(corners[-1])
     pts = np.array(pts)
     t = np.arange(len(pts)) / fps
-    tr = traj_from(t, pts[:, 0], pts[:, 1], smoothing_window_s=0.0)
-    m, _, _ = compute_movement_metrics(tr)
+    raw = traj_from(t, pts[:, 0], pts[:, 1], smoother="savgol", smoothing_window_s=0.0)  # no smoothing
+    m, _, _ = compute_movement_metrics(raw)
     assert m["distance"]["total_m"] == pytest.approx(8.0, abs=0.02)
+    smooth = traj_from(t, pts[:, 0], pts[:, 1])  # Kalman: cuts the four corners a little
+    m2, _, _ = compute_movement_metrics(smooth)
+    assert m2["distance"]["total_m"] == pytest.approx(8.0, rel=0.03)
 
 
 def test_short_gaps_interpolated_long_gaps_not():
@@ -216,3 +221,27 @@ def test_metrics_empty_trajectory_is_safe():
     assert m["speed"]["mean_mps"] is None
     assert m["observed_s"] == 0
     assert isinstance(pd.DataFrame(events), pd.DataFrame)
+
+
+def test_kalman_handles_uneven_sampling_and_noise(rng):
+    # 25 fps footage sampled at a non-divisor rate alternates 0.04 / 0.08 s steps.
+    t = np.cumsum(np.tile([0.04, 0.08], 100))
+    x = 1.0 + 1.0 * t
+    y = np.full_like(t, 3.0)
+    noisy_x = x + rng.normal(0, 0.1, len(t))
+    noisy_y = y + rng.normal(0, 0.1, len(t))
+    tr = traj_from(t, noisy_x, noisy_y)
+    v = tr["speed"].iloc[10:-10]
+    assert v.median() == pytest.approx(1.0, abs=0.15)
+    assert v.max() < 2.0  # 10 cm jitter must not become sprint speeds
+    assert np.nanmean(np.abs(tr["court_x"] - x)) < 0.06
+
+
+def test_persistent_jump_starts_new_segment():
+    t = np.arange(0, 4, 0.08)
+    x = np.full_like(t, 3.0)
+    y = np.where(t < 2, 3.0, 11.0)  # identity swap to the far player that the tracker did not catch
+    tr = traj_from(t, x, y)
+    seg = tr["segment"].to_numpy()
+    assert seg[t < 1.9].max() != seg[t > 2.5].min()  # never connected
+    assert tr["speed"].max() < 1.0  # no 100 m/s "sprint" across the net

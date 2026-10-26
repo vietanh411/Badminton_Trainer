@@ -302,6 +302,25 @@ export interface Quality {
   seed_track: number | null;
   selection: { auto: boolean; t: number };
   calibration: { source: string | null; mean_error_m?: number; warnings?: string[]; error?: string; score?: number };
+  /** Edited footage: shots between video cuts (absent in results from before cut handling). */
+  shots?: {
+    count: number;
+    cuts: number;
+    used: number;
+    recalibrated: number;
+    excluded: number;
+    cross_cut_links: number;
+    target_uncertain_shots: number;
+    details: {
+      shot: number;
+      t_start: number;
+      t_end: number;
+      samples: number;
+      status: "used" | "recalibrated" | "excluded";
+      court_view_precision: number | null;
+      reason: string | null;
+    }[];
+  };
 }
 
 export interface MetricsResponse {
@@ -382,6 +401,8 @@ export interface AnnotationFrame {
   court?: [number, number] | null;
   speed?: number | null;
   interp?: boolean;
+  /** Shot (continuous stretch between video cuts) this frame belongs to. */
+  shot?: number;
 }
 
 export interface Annotations {

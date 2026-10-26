@@ -18,6 +18,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pandas as pd
 
@@ -31,12 +32,13 @@ from vision.pose.landmarks import NUM_LANDMARKS, body_metrics
 from vision.strokes.detection import StrokeConfig, detect_strokes
 from vision.tracking.appearance import HIST_DIM, appearance_descriptor
 from vision.tracking.bytetrack import ByteTrackConfig, ByteTracker
-from vision.tracking.target import TargetConfig, TargetSelectionError, resolve_target
+from vision.tracking.target import TargetConfig, TargetSelectionError, resolve_target, split_tracks_at_jumps
 from vision.trajectory.filtering import TrajectoryConfig, process_trajectory, sample_weights
 from vision.trajectory.position import foot_contact_points, to_court
-from vision.video.reader import iter_frames, probe_video, read_frame_at, resize_to_width
+from vision.video.reader import iter_frames, probe_video, read_frame_at, resize_to_width, sample_step
+from vision.video.shots import ShotConfig, ShotDetector, court_view_precision, cuts_from_tracks
 
-PIPELINE_VERSION = "1.0.0"
+PIPELINE_VERSION = "1.2.0"
 STAGES = ["VALIDATING", "CALIBRATING", "DETECTING", "TRACKING", "ESTIMATING_POSE", "ANALYZING", "RENDERING"]
 
 PROFILES: dict[str, dict] = {
@@ -91,6 +93,7 @@ class PipelineSettings:
     strokes: StrokeConfig = field(default_factory=StrokeConfig)
     target: TargetConfig = field(default_factory=TargetConfig)
     bytetrack: ByteTrackConfig = field(default_factory=ByteTrackConfig)
+    shots: ShotConfig = field(default_factory=ShotConfig)
 
     def __post_init__(self) -> None:
         if self.performance_mode not in PROFILES:
@@ -221,6 +224,7 @@ def stage_detect_track(inp: PipelineInputs, detector_name: str, progress: Progre
         prof.get("yolo_weights"),
         prof.get("yolo_imgsz"),
         asdict(s.bytetrack),
+        asdict(s.shots),
     )
     cdir = inp.cache_dir / f"det_{key}"
     if (cdir / "tracks.parquet").exists():
@@ -231,6 +235,8 @@ def stage_detect_track(inp: PipelineInputs, detector_name: str, progress: Progre
             "tracks": pd.read_parquet(cdir / "tracks.parquet"),
             "detections": pd.read_parquet(cdir / "detections.parquet"),
             "appearance": np.load(cdir / "appearance.npy"),
+            "shots": pd.read_parquet(cdir / "shots.parquet"),
+            "shot_dir": cdir / "shots",
             "cached": True,
         }
 
@@ -248,13 +254,36 @@ def stage_detect_track(inp: PipelineInputs, detector_name: str, progress: Progre
     else:
         combined = None
         detector = build_detector(detector_name, s, inp.models_dir, inp.synthetic_truth)
-        tracker = ByteTracker(fps=prof["analysis_fps"], config=s.bytetrack)
+        eff_fps = meta.fps / sample_step(meta.fps, prof["analysis_fps"])
+        tracker = ByteTracker(fps=eff_fps, config=s.bytetrack)
+    shot_det = ShotDetector(s.shots)
+    shot_dir = cdir / "shots"
+    shot_dir.mkdir(parents=True, exist_ok=True)
+    shot_starts: list[float] = []
+    thumb_pending = True
     try:
         for frame in iter_frames(
             inp.video_path, target_fps=prof["analysis_fps"], max_width=prof["max_width"], cancel=cancel
         ):
             _check(cancel)
-            samples.append((frame.sample_index, frame.index, frame.timestamp_s))
+            if shot_det.update(frame.image, frame.timestamp_s) or not shot_starts:
+                # A cut: nothing may be associated across it, so the tracker starts over.
+                if shot_starts:
+                    if tracker is not None:
+                        tracker.new_shot()
+                    if combined is not None:
+                        combined.new_shot()
+                shot_starts.append(frame.timestamp_s)
+                thumb_pending = True
+            shot = len(shot_starts) - 1
+            # Keep one representative frame per shot (0.4 s in, past any transition blur) for the
+            # court-view check; the shot's first frame is the fallback for very short shots.
+            if thumb_pending and (
+                frame.timestamp_s - shot_starts[-1] >= 0.4 or not (shot_dir / f"{shot}.jpg").exists()
+            ):
+                cv2.imwrite(str(shot_dir / f"{shot}.jpg"), frame.image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                thumb_pending = frame.timestamp_s - shot_starts[-1] < 0.4
+            samples.append((frame.sample_index, frame.index, frame.timestamp_s, shot))
             if combined is not None:
                 dets, outs = combined.step(frame)
                 dets = filter_detections(dets, frame_height=frame.image.shape[0])
@@ -265,7 +294,7 @@ def stage_detect_track(inp: PipelineInputs, detector_name: str, progress: Progre
                 det_rows.append((frame.sample_index, *d.bbox.tolist(), d.score))
             for o in outs:
                 track_rows.append(
-                    (frame.sample_index, frame.index, frame.timestamp_s, o.track_id, *o.bbox.tolist(), o.score)
+                    (frame.sample_index, frame.index, frame.timestamp_s, o.track_id, *o.bbox.tolist(), o.score, shot)
                 )
                 app_rows.append(appearance_descriptor(frame.image, o.bbox))
             if frame.sample_index % 10 == 0:
@@ -278,17 +307,28 @@ def stage_detect_track(inp: PipelineInputs, detector_name: str, progress: Progre
                 obj.close()
     if not samples:
         raise PipelineError("no frames could be decoded")
-    samples_df = pd.DataFrame(samples, columns=["sample_index", "frame_index", "t"])
+    samples_df = pd.DataFrame(samples, columns=["sample_index", "frame_index", "t", "shot"])
     tracks_df = pd.DataFrame(
-        track_rows, columns=["sample_index", "frame_index", "t", "track_id", "x1", "y1", "x2", "y2", "score"]
+        track_rows,
+        columns=["sample_index", "frame_index", "t", "track_id", "x1", "y1", "x2", "y2", "score", "shot"],
+    )
+    g = samples_df.groupby("shot")["t"]
+    shots_df = pd.DataFrame(
+        {
+            "shot": g.min().index,
+            "t_start": g.min().to_numpy(),
+            "t_end": g.max().to_numpy(),
+            "samples": g.size().to_numpy(),
+        }
     )
     dets_df = pd.DataFrame(det_rows, columns=["sample_index", "x1", "y1", "x2", "y2", "score"])
     app = np.array(app_rows, np.float32).reshape(-1, HIST_DIM)
     cdir.mkdir(parents=True, exist_ok=True)
     samples_df.to_parquet(cdir / "samples.parquet")
-    tracks_df.to_parquet(cdir / "tracks.parquet")
+    shots_df.to_parquet(cdir / "shots.parquet")
     dets_df.to_parquet(cdir / "detections.parquet")
     np.save(cdir / "appearance.npy", app)
+    tracks_df.to_parquet(cdir / "tracks.parquet")  # written last: its presence marks a complete cache entry
     (cdir / "info.json").write_text(
         json.dumps(
             {
@@ -297,6 +337,7 @@ def stage_detect_track(inp: PipelineInputs, detector_name: str, progress: Progre
                 "profile": prof,
                 "seconds": time.time() - started,
                 "samples": len(samples_df),
+                "shots": len(shots_df),
             }
         )
     )
@@ -306,16 +347,29 @@ def stage_detect_track(inp: PipelineInputs, detector_name: str, progress: Progre
         "tracks": tracks_df,
         "detections": dets_df,
         "appearance": app,
+        "shots": shots_df,
+        "shot_dir": shot_dir,
         "cached": False,
     }
 
 
-def _court_filter_tracks(tracks: pd.DataFrame, H: np.ndarray | None, margin: float = 2.0) -> pd.DataFrame:
+def _court_filter_tracks(
+    tracks: pd.DataFrame, H: np.ndarray | None, margin: float = 2.0, H_by_shot: dict | None = None
+) -> pd.DataFrame:
     """Drop whole tracks whose median foot point lies off the court (umpires, coaches, spectators)."""
-    if H is None or tracks.empty:
+    if tracks.empty or (H is None and not H_by_shot):
         return tracks
     foot = np.column_stack([(tracks["x1"] + tracks["x2"]) / 2, tracks["y2"]])
-    xy = project(H, foot)
+    if H_by_shot is not None and "shot" in tracks:
+        xy = np.full((len(tracks), 2), np.nan)
+        for sh, idx in tracks.groupby("shot").indices.items():
+            Hs = H_by_shot.get(int(sh))
+            if Hs is not None:
+                xy[idx] = project(Hs, foot[idx])
+            else:
+                xy[idx] = [COURT_WIDTH / 2, COURT_LENGTH / 4]  # unknown geometry: keep (no evidence to drop)
+    else:
+        xy = project(H, foot)
     df = tracks.assign(cx=xy[:, 0], cy=xy[:, 1])
     med = df.groupby("track_id")[["cx", "cy"]].median()
     ok = med[
@@ -325,6 +379,86 @@ def _court_filter_tracks(tracks: pd.DataFrame, H: np.ndarray | None, margin: flo
         & (med.cy < COURT_LENGTH + margin + 1)
     ].index
     return tracks[tracks["track_id"].isin(ok)]
+
+
+def split_shots(det: dict, extra_starts: list[int]) -> dict:
+    """Insert additional shot boundaries (sample indices). New shots keep their parent's thumbnail."""
+    samples = det["samples"].sort_values("sample_index").reset_index(drop=True)
+    parent = samples["shot"].to_numpy()
+    start = np.r_[True, parent[1:] != parent[:-1]] | samples["sample_index"].isin(extra_starts).to_numpy()
+    new_shot = np.cumsum(start) - 1
+    samples = samples.assign(shot=new_shot)
+    mapping = dict(zip(samples["sample_index"], new_shot, strict=True))
+    tracks = det["tracks"].assign(shot=det["tracks"]["sample_index"].map(mapping).astype(int))
+    g = samples.groupby("shot")
+    shots = pd.DataFrame(
+        {
+            "shot": g["t"].min().index,
+            "t_start": g["t"].min().to_numpy(),
+            "t_end": g["t"].max().to_numpy(),
+            "samples": g.size().to_numpy(),
+            "thumb": pd.Series(parent).groupby(new_shot).first().to_numpy(),
+        }
+    )
+    return {**det, "samples": samples, "tracks": tracks, "shots": shots}
+
+
+def classify_shots(det: dict, H: np.ndarray | None, cfg: ShotConfig, progress: ProgressFn) -> tuple[dict, dict, list]:
+    """Decide per shot whether it shows the calibrated court view.
+
+    A shot is *used* when the session calibration's court lines land on painted lines in its
+    representative frame; otherwise automatic court detection is tried on that frame (the camera
+    may have moved or zoomed), and if that fails too the shot is *excluded* (close-up, replay
+    graphic, crowd, logo animation). Returns (homography per shot, excluded shot → reason, info rows).
+    """
+    shots = det["shots"]
+    shot_dir = det["shot_dir"]
+    H_by_shot: dict[int, np.ndarray | None] = {}
+    excluded: dict[int, str] = {}
+    info: list[dict] = []
+    for k, row in enumerate(shots.itertuples()):
+        sh = int(row.shot)
+        rec = {
+            "shot": sh,
+            "t_start": float(row.t_start),
+            "t_end": float(row.t_end),
+            "samples": int(row.samples),
+            "status": "used",
+            "court_view_precision": None,
+            "reason": None,
+        }
+        if row.samples < 2 or row.t_end - row.t_start < cfg.min_shot_s:
+            excluded[sh] = "too short (transition)"
+        elif H is None:
+            H_by_shot[sh] = None
+        else:
+            thumb = int(getattr(row, "thumb", sh))
+            img = cv2.imread(str(shot_dir / f"{thumb}.jpg"))
+            if img is None:
+                H_by_shot[sh] = H
+            else:
+                prec = court_view_precision(img, H)
+                rec["court_view_precision"] = round(prec, 3)
+                if prec >= cfg.court_view_min_precision:
+                    H_by_shot[sh] = H
+                else:
+                    res = auto_calibrate(img)
+                    prec2 = court_view_precision(img, res.calibration.H) if res.success else 0.0
+                    if res.success and prec2 >= cfg.court_view_min_precision:
+                        H_by_shot[sh] = res.calibration.H
+                        rec["status"] = "recalibrated"
+                        rec["reason"] = "court view differs from the calibration frame; recalibrated automatically"
+                        rec["court_view_precision"] = round(prec2, 3)
+                    else:
+                        excluded[sh] = "does not show the calibrated court view (close-up, replay, graphics or crowd)"
+        if sh in excluded:
+            rec["status"] = "excluded"
+            rec["reason"] = excluded[sh]
+            H_by_shot[sh] = None
+        info.append(rec)
+        if k % 5 == 0:
+            progress("TRACKING", 0.5 * k / max(1, len(shots)), f"checking shot {k + 1}/{len(shots)} for the court view")
+    return H_by_shot, excluded, info
 
 
 def auto_select_target(tracks: pd.DataFrame, H: np.ndarray | None) -> dict:
@@ -396,35 +530,62 @@ def stage_pose(
 def analyse(
     target: pd.DataFrame,
     pose: dict,
-    H: np.ndarray | None,
+    H: np.ndarray | dict | None,
     settings: PipelineSettings,
     stroke_model_dir: Path | None = None,
 ) -> dict:
-    """Positions → trajectory → movement metrics → strokes → heatmap. Pure computation."""
+    """Positions → trajectory → movement metrics → strokes → heatmap. Pure computation.
+
+    ``H`` is one homography, or a dict shot → homography (None for shots without a usable court
+    view). Nothing is connected across shot boundaries.
+    """
+    if "shot" not in target:
+        target = target.assign(shot=0)
+    shot = target["shot"].to_numpy()
+    H_by_shot = H if isinstance(H, dict) else {int(sh): H for sh in np.unique(shot)}
+    calibrated = any(v is not None for v in H_by_shot.values())
     t = target["t"].to_numpy(float)
     bbox = target[["x1", "y1", "x2", "y2"]].to_numpy(float)
     xy = pose["xy"].astype(float)
     vis = pose["visibility"].astype(float)
     contact = foot_contact_points(xy, vis, bbox, target["score"].to_numpy(float))
-    out: dict = {"calibrated": H is not None}
+    out: dict = {"calibrated": calibrated}
     positions = pd.concat(
         [
             target[
-                ["sample_index", "frame_index", "t", "track_id", "status", "x1", "y1", "x2", "y2", "max_overlap_iou"]
+                [
+                    "sample_index",
+                    "frame_index",
+                    "t",
+                    "shot",
+                    "track_id",
+                    "status",
+                    "x1",
+                    "y1",
+                    "x2",
+                    "y2",
+                    "max_overlap_iou",
+                ]
             ].reset_index(drop=True),
             contact,
         ],
         axis=1,
     )
     depth_from_net = None
-    if H is not None:
-        contact = to_court(contact, H)
+    if calibrated:
+        court = np.full((len(contact), 2), np.nan)
+        for sh, Hs in H_by_shot.items():
+            m = shot == sh
+            if Hs is not None and m.any():
+                court[m] = to_court(contact[m], Hs)[["court_x_raw", "court_y_raw"]].to_numpy()
+        contact = contact.assign(court_x_raw=court[:, 0], court_y_raw=court[:, 1])
         traj = process_trajectory(
             t,
             contact["court_x_raw"].to_numpy(),
             contact["court_y_raw"].to_numpy(),
             contact["position_confidence"].to_numpy(),
             settings.trajectory,
+            breaks=shot,
         )
         metrics, movement_events, derived = compute_movement_metrics(traj, settings.movement)
         positions = pd.concat(
@@ -480,9 +641,26 @@ def analyse(
 
     stroke_events, stroke_diag = [], {"enabled": False}
     if settings.detect_strokes and pose_ok.sum() >= 10:
-        stroke_events, stroke_diag = detect_strokes(
-            t, np.where(pose_ok[:, None, None], xy, np.nan), vis, settings.strokes, depth_from_net
-        )
+        xy_ok = np.where(pose_ok[:, None, None], xy, np.nan)
+        # Handedness from the whole video, then detection per shot: a cut makes the wrist "jump",
+        # which would otherwise look like the fastest swing in the video.
+        _ev, stroke_diag = detect_strokes(t, xy_ok, vis, settings.strokes, depth_from_net)
+        cfg_hand = StrokeConfig(**{**asdict(settings.strokes), "handedness": stroke_diag.get("handedness") or "right"})
+        if len(np.unique(shot)) > 1:
+            stroke_events = []
+            for sh in np.unique(shot):
+                idx = np.flatnonzero(shot == sh)
+                if pose_ok[idx].sum() < 10:
+                    continue
+                ev, _ = detect_strokes(
+                    t[idx], xy_ok[idx], vis[idx], cfg_hand, None if depth_from_net is None else depth_from_net[idx]
+                )
+                for e in ev:
+                    e["sample_index"] = int(idx[e["sample_index"]])
+                stroke_events.extend(ev)
+            stroke_diag["candidates"] = len(stroke_events)
+        else:
+            stroke_events = _ev
         stroke_diag["enabled"] = True
         if stroke_model_dir is not None and stroke_events:
             stroke_diag["model"] = apply_stroke_model(
@@ -562,6 +740,7 @@ def run_pipeline(
 
     progress("VALIDATING", 0.0, "reading video metadata")
     meta = probe_video(inp.video_path)
+    eff_fps = meta.fps / sample_step(meta.fps, prof["analysis_fps"])  # frames are taken every n-th source frame
     first, _ = read_frame_at(inp.video_path, 0.0)
     analysis_img, scale = resize_to_width(first, prof["max_width"])
     ah, aw = analysis_img.shape[:2]
@@ -586,7 +765,16 @@ def run_pipeline(
 
     t1 = time.time()
     progress("TRACKING", 0.0, "resolving the selected player's identity")
-    tracks = _court_filter_tracks(det["tracks"], H)
+    if s.shots.enabled:
+        extra = cuts_from_tracks(det["samples"], det["tracks"], det["appearance"])
+        if extra:
+            det = split_shots(det, extra)
+    H_by_shot, excluded_shots, shot_info = classify_shots(det, H, s.shots, progress)
+    # Undo tracker identity swaps before anything uses the ids (stored tracks included).
+    split_tracks, n_split = split_tracks_at_jumps(det["tracks"], H_by_shot, s.target.switch_speed_mps)
+    det = {**det, "tracks": split_tracks}
+    usable = det["tracks"][~det["tracks"]["shot"].isin(list(excluded_shots))]
+    tracks = _court_filter_tracks(usable, H, H_by_shot=H_by_shot)
     if tracks.empty and not det["tracks"].empty and cal is not None and not inp.calibration:
         # An unverified automatic calibration that puts every person off the court is wrong.
         cal_info = {
@@ -594,7 +782,8 @@ def run_pipeline(
             "error": "automatic calibration rejected: it placed every tracked person off the court",
         }
         cal, H = None, None
-        tracks = det["tracks"]
+        H_by_shot = {k: None for k in H_by_shot}
+        tracks = usable
     app = det["appearance"][tracks.index.to_numpy()] if len(tracks) else det["appearance"][:0]
     tracks = tracks.reset_index(drop=True)
     if tracks.empty:
@@ -604,7 +793,17 @@ def run_pipeline(
     else:
         sel = auto_select_target(tracks, H)
     try:
-        tres = resolve_target(tracks, app, det["samples"], sel, H=H, corrections=inp.corrections, config=s.target)
+        tres = resolve_target(
+            tracks,
+            app,
+            det["samples"],
+            sel,
+            H=H,
+            H_by_shot=H_by_shot,
+            excluded_shots=excluded_shots,
+            corrections=inp.corrections,
+            config=s.target,
+        )
     except TargetSelectionError as exc:
         raise PipelineError(str(exc)) from exc
     target = tres.frames
@@ -620,7 +819,14 @@ def run_pipeline(
 
     t1 = time.time()
     progress("ANALYZING", 0.0, "computing trajectory and movement metrics")
-    res = analyse(target, pose, H, s, inp.stroke_model_dir)
+    res = analyse(target, pose, H_by_shot, s, inp.stroke_model_dir)
+    if len(shot_info) > 1 and res["metrics"].get("calibrated", True) is not False:
+        # Coverage relative to the time that shows the court, not to the whole edited video.
+        dt = 1.0 / eff_fps
+        court_s = sum(r["t_end"] - r["t_start"] + dt for r in shot_info if r["status"] != "excluded")
+        m = res["metrics"]
+        m["court_view_s"] = court_s
+        m["coverage_pct"] = 100.0 * m["observed_s"] / court_s if court_s > 0 else 0.0
     timings["analyzing"] = time.time() - t1
     _check(cancel)
 
@@ -634,7 +840,19 @@ def run_pipeline(
     np.savez_compressed(
         out / "pose.npz", xy=pose["xy"], z=pose["z"], visibility=pose["visibility"], presence=pose["presence"]
     )
-    events = sorted(tres.events + res["events"], key=lambda e: e["t"])
+    shot_events = [{"type": "shot_cut", "t": round(r["t_start"], 3), "shot": r["shot"]} for r in shot_info[1:]]
+    shot_events += [
+        {
+            "type": "shot_excluded",
+            "t": round(r["t_start"], 3),
+            "t_end": round(r["t_end"], 3),
+            "shot": r["shot"],
+            "reason": r["reason"],
+        }
+        for r in shot_info
+        if r["status"] == "excluded"
+    ]
+    events = sorted(tres.events + res["events"] + shot_events, key=lambda e: e["t"])
     (out / "events.json").write_text(json.dumps(clean_json(events), default=_json_default))
     if "heatmap" in res:
         from vision.visualization.court_plot import heatmap_figure, save_figure
@@ -658,18 +876,30 @@ def run_pipeline(
         "linked_frames": int((target["status"] == "linked").sum()),
         "identity_links": sum(1 for e in tres.events if e["type"] == "identity_link"),
         "possible_id_switches": sum(1 for e in tres.events if e["type"] == "possible_id_switch"),
+        "tracker_swaps_split": n_split,
         "tracking_gaps": sum(1 for e in tres.events if e["type"] == "tracking_gap"),
         "people_tracked": int(det["tracks"]["track_id"].nunique()),
         "seed_track": tres.seed_track,
         "selection": {"auto": bool(sel.get("auto", False)), "t": sel["t"]},
         "calibration": cal_info,
+        "shots": {
+            "count": len(shot_info),
+            "cuts": max(0, len(shot_info) - 1),
+            "used": sum(1 for r in shot_info if r["status"] == "used"),
+            "recalibrated": sum(1 for r in shot_info if r["status"] == "recalibrated"),
+            "excluded": sum(1 for r in shot_info if r["status"] == "excluded"),
+            "cross_cut_links": sum(1 for e in tres.events if e["type"] == "shot_link"),
+            "target_uncertain_shots": sum(1 for e in tres.events if e["type"] == "shot_target_uncertain"),
+            "details": shot_info,
+        },
     }
     summary = {
         "pipeline_version": PIPELINE_VERSION,
         "synthetic": synthetic,
         "video": meta.to_dict(),
         "analysis": {
-            "fps": prof["analysis_fps"],
+            "fps": eff_fps,
+            "requested_fps": prof["analysis_fps"],
             "width": aw,
             "height": ah,
             "scale": scale,

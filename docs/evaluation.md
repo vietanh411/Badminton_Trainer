@@ -40,18 +40,18 @@ Eight 40-second rendered scenes (1280×720, 30 fps, two players), analysed by th
 
 > **Synthetic data.** Rendered scenes with exact ground truth. Detections and pose come from ground truth plus noise (2 px box noise, 3% random misses, scripted occlusions; 1.5 px landmark noise), so these numbers measure calibration, tracking association, identity linking, trajectory processing and metric computation — **not** the accuracy of YOLO or MediaPipe on real footage.
 
-Generated 2026-10-25 on Windows-11-10.0.26200-SP0 / Python 3.12.0 by `scripts/run_synthetic_benchmark.py`.
+Generated 2026-10-26 on Windows-11-10.0.26200-SP0 / Python 3.12.0 by `scripts/run_synthetic_benchmark.py`.
 
 | Scenario | fps | Calib. grid error (m) | Target frames correct | IDF1 (all people) | Position MAE (m) | Distance error (all / observed time) | Mean speed est / true (m/s) | Max speed est / true (m/s) | Zone share MAE (pp) | Stroke event F1 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| baseline-view, manual calibration | 15 | 0.038 | 98.8% | 0.99 | 0.059 | -2.4% / -2.4% | 1.40 / 1.40 | 4.57 / 4.39 | 0.1 | 0.84 |
-| baseline-view, fast player | 15 | 0.042 | 98.8% | 0.99 | 0.065 | -1.9% / -1.9% | 1.87 / 1.87 | 6.05 / 5.80 | 0.2 | 0.95 |
-| baseline-view, 2 occlusions of the target | 15 | 0.031 | 83.8% | 0.70 | 0.049 | -13.4% / -2.0% | 1.58 / 1.62 | 4.62 / 4.55 | 0.5 | 0.47 |
-| baseline-view, automatic calibration | 15 | 0.056 | 98.8% | 0.99 | 0.065 | -1.9% / -1.9% | 1.37 / 1.37 | 4.47 / 4.30 | 0.2 | 0.89 |
-| corner-view, manual calibration | 15 | 0.046 | 98.8% | 0.99 | 0.045 | -1.6% / -1.6% | 1.56 / 1.56 | 4.46 / 4.37 | 0.3 | 0.70 |
-| baseline-view, sloppy clicks (4 px) | 15 | 0.054 | 98.8% | 0.99 | 0.055 | -2.3% / -2.3% | 1.49 / 1.50 | 4.44 / 4.26 | 0.2 | 0.40 |
-| baseline-view, fast mode (10 fps) | 10 | 0.054 | 95.0% | 0.78 | 0.036 | -0.8% / -0.7% | 1.56 / 1.55 | 4.47 / 4.39 | 0.1 | 0.78 |
-| baseline-view, accurate mode (30 fps) | 30 | 0.055 | 95.0% | 0.98 | 0.072 | -1.9% / -1.9% | 1.57 / 1.56 | 4.40 / 4.41 | 0.1 | 0.76 |
+| baseline-view, manual calibration | 15 | 0.038 | 98.8% | 0.99 | 0.053 | -4.1% / -4.1% | 1.39 / 1.40 | 4.31 / 4.39 | 0.1 | 0.84 |
+| baseline-view, fast player | 15 | 0.042 | 98.8% | 0.99 | 0.057 | -2.9% / -2.9% | 1.86 / 1.87 | 5.81 / 5.80 | 0.1 | 0.95 |
+| baseline-view, 2 occlusions of the target | 15 | 0.031 | 83.8% | 0.70 | 0.043 | -14.5% / -3.3% | 1.57 / 1.62 | 4.40 / 4.55 | 0.6 | 0.47 |
+| baseline-view, automatic calibration | 15 | 0.056 | 98.8% | 0.99 | 0.060 | -3.8% / -3.8% | 1.36 / 1.37 | 4.30 / 4.30 | 0.1 | 0.89 |
+| corner-view, manual calibration | 15 | 0.046 | 98.8% | 0.99 | 0.038 | -3.5% / -3.4% | 1.55 / 1.56 | 4.30 / 4.37 | 0.1 | 0.70 |
+| baseline-view, sloppy clicks (4 px) | 15 | 0.054 | 98.8% | 0.99 | 0.050 | -3.7% / -3.7% | 1.48 / 1.50 | 4.15 / 4.26 | 0.2 | 0.40 |
+| baseline-view, fast mode (10 fps) | 10 | 0.054 | 95.0% | 0.82 | 0.035 | -3.2% / -2.7% | 1.55 / 1.55 | 4.39 / 4.39 | 0.1 | 0.78 |
+| baseline-view, accurate mode (30 fps) | 30 | 0.055 | 95.0% | 0.98 | 0.072 | -2.6% / -2.6% | 1.56 / 1.56 | 4.39 / 4.41 | 0.1 | 0.76 |
 
 Column notes:
 * *Calib. grid error*: mean distance between true and estimated court coordinates over a 7×9 grid covering the whole court.
@@ -62,17 +62,19 @@ Reading the table:
 
 * **Calibration** with 1.5 px click noise maps the whole court with 3.1–5.5 cm mean error; 4 px clicks
   and the automatic detector give 5.4 and 5.6 cm.
-* **Distance** over observed time is 0.7–2.4 % *below* the true path in every scenario (smoothing cuts
-  small corners). In the occlusion scenario the whole-clip figure is −13 % because 3.7 s of movement were never seen — by design, gaps are
-  reported, not filled; over observed time the error is −2 %.
+* **Position** MAE of the filtered trajectory is 3.5–7.2 cm.
+* **Distance** over observed time is 2.6–4.1 % *below* the true path in every scenario: the Kalman smoother
+  cuts small corners. (The earlier Savitzky–Golay smoother was 0.7–2.4 % low here, but on real broadcast
+  footage it turned frame-to-frame foot jitter into sprint speeds — see methodology §7 — so the Kalman
+  smoother is the default.) In the occlusion scenario the whole-clip figure is −13 % because 3.7 s of movement were never seen — by design, gaps are
+  reported, not filled; over observed time the error is −3.3 %.
 * **Identity**: both occlusions were bridged by identity links with no frame assigned to the wrong person;
   the missing share equals the occluded time plus the simulated 3 % random detector drop-outs.
   IDF1 is computed on the raw *tracker* ids of all people, before identity linking. It drops in the
   occlusion scene because the target gets a new tracker id after each occlusion (the linking step then
   joins them, which IDF1 does not see), and in fast mode because the small far-side opponent fragments —
   a real ByteTrack weakness on small, fast boxes at 10 fps.
-* **Max speed** is off by −0.2 % to +4.3 % (noise survives smoothing at the peaks); mean speed is within
-  0.04 m/s of the truth.
+* **Max speed** is within −3.8 % to +0.1 % of the truth; mean speed is within 0.05 m/s.
 * **Strokes**: F1 varies from 0.40 to 0.95 between seeds. The simulated swing is a crude keyframe model, so
   this column only demonstrates that event detection and its evaluation run end to end; it says nothing
   about real swings.
@@ -86,6 +88,22 @@ coordinates, and that the pipeline reports *uncalibrated* rather than inventing 
 no court. `test_auto_calibration_rejects_cluttered_non_court_photo` checks that automatic court detection
 refuses two real non-court photographs (a street scene and a portrait). These are functional checks, not
 accuracy estimates.
+
+## 3b. Broadcast highlight video (measured, partial)
+
+A 10.6-minute 1080p, 25 fps highlight reel of a 2018 men's singles final (fixed camera behind one baseline,
+47 detected cuts, an animated logo sting) was analysed end to end in *balanced* mode. The footage is not
+included in the repository. No frame-level ground truth exists for it, so only these checks were made:
+
+| Check | Result | How |
+|---|---|---|
+| Cut detection | 38/38 same-view cuts, 0 false (15 fps) | vs. a full-frame-rate two-sided reference detector plus visual inspection of disputed frames; thresholds were tuned on this video |
+| Shot classification | logo sting and transitions excluded (7 shots); 41 shots used | visual inspection of each shot's representative frame |
+| Player re-identified across cuts | 38 cuts linked; 2 shots flagged "player not found" | the analysed box was inspected in the middle of every used shot: it was on the selected player in every shot where one was assigned |
+| Tracker identity swaps undone | 22 split | before the fix, swaps to the opponent produced 20–34 m/s "sprints" |
+| Speed plausibility | mean 1.96 m/s, p95 4.5 m/s, max 8.8 m/s, target tracked in 85.9 % of court-view frames | no ground truth; values are physically plausible but unvalidated |
+
+Processing took 11.6 minutes for 10.6 minutes of video on the laptop CPU described below.
 
 ## 4. Performance (measured)
 

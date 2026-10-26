@@ -10,6 +10,10 @@ export const EVENT_STYLE: Record<string, { color: string; label: string }> = {
   tracking_gap: { color: "#f87171", label: "Tracking gap" },
   possible_id_switch: { color: "#fb7185", label: "Possible ID switch" },
   identity_link: { color: "#a78bfa", label: "Identity link" },
+  shot_cut: { color: "#e2e8f0", label: "Video cut" },
+  shot_link: { color: "#c084fc", label: "Player re-identified after cut" },
+  shot_target_uncertain: { color: "#fb923c", label: "Player not found after cut" },
+  shot_excluded: { color: "#475569", label: "Not the court view (excluded)" },
 };
 
 export function Timeline({
@@ -41,7 +45,12 @@ export function Timeline({
   const pct = (t: number) => `${(Math.min(Math.max(t, 0), d) / d) * 100}%`;
 
   const rangeTypes = new Set(["high_speed", "tracking_gap"]);
-  const visible = events.filter((e) => !hidden.has(e.type) && e.type !== "stroke" && EVENT_STYLE[e.type]);
+  const shotTypes = new Set(["shot_cut", "shot_excluded"]);
+  const visible = events.filter(
+    (e) => !hidden.has(e.type) && e.type !== "stroke" && !shotTypes.has(e.type) && EVENT_STYLE[e.type],
+  );
+  const excludedShots = hidden.has("shot_excluded") ? [] : events.filter((e) => e.type === "shot_excluded" && typeof e.t_end === "number");
+  const cuts = hidden.has("shot_cut") ? [] : events.filter((e) => e.type === "shot_cut");
   const strokeVisible = !hidden.has("stroke");
 
   return (
@@ -77,6 +86,23 @@ export function Timeline({
         {drag && Math.abs(drag.t1 - drag.t0) > 0 && (
           <div className="absolute inset-y-0 bg-cyan-400/20" style={{ left: pct(Math.min(drag.t0, drag.t1)), width: `${(Math.abs(drag.t1 - drag.t0) / d) * 100}%` }} />
         )}
+        {/* Excluded shots (no calibrated court view) are greyed out; cuts are thin full-height lines. */}
+        {excludedShots.map((e, i) => (
+          <div
+            key={`x${i}`}
+            className="absolute inset-y-0 bg-[repeating-linear-gradient(135deg,rgba(71,85,105,0.55)_0_4px,transparent_4px_8px)]"
+            style={{ left: pct(e.t), width: `max(2px, calc(${pct(e.t_end as number)} - ${pct(e.t)}))` }}
+            onMouseEnter={(ev) => setHover({ x: ev.clientX, text: `Excluded ${fmtTime(e.t)}–${fmtTime(e.t_end)}: ${String(e.reason ?? "")}` })}
+          />
+        ))}
+        {cuts.map((e, i) => (
+          <div
+            key={`c${i}`}
+            className="absolute inset-y-0 w-px bg-slate-200/50"
+            style={{ left: pct(e.t) }}
+            onMouseEnter={(ev) => setHover({ x: ev.clientX, text: `Video cut @ ${fmtTime(e.t)}` })}
+          />
+        ))}
         {visible.map((e, i) => {
           const st = EVENT_STYLE[e.type];
           const isRange = rangeTypes.has(e.type) && typeof e.t_end === "number";

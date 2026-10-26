@@ -127,8 +127,11 @@ export function VideoAnalyzer({
       const r = contentRect(v);
       ensureWindows(t);
 
-      // Court lines from the calibration (full-resolution pixels → display).
-      if (layers.court && court && courtToImage) {
+      const { frame, ann, trail } = frameAt(t);
+
+      // Court lines from the calibration (full-resolution pixels → display). Not drawn over shots that
+      // were excluded because they do not show the calibrated court view (replays, graphics, close-ups).
+      if (layers.court && court && courtToImage && frame?.status !== "excluded_shot") {
         const fullToDisplay = scaleMat(r.w / session.video.width, r.h / session.video.height);
         const H = multiply(fullToDisplay, courtToImage);
         ctx.save();
@@ -146,7 +149,6 @@ export function VideoAnalyzer({
         ctx.restore();
       }
 
-      const { frame, ann, trail } = frameAt(t);
       if (!frame || !ann) return;
       const s = r.w / ann.analysis_width;
       const X = (x: number) => r.x + x * s;
@@ -157,7 +159,8 @@ export function VideoAnalyzer({
         for (let i = 1; i < trail.length; i++) {
           const a = trail[i - 1].foot;
           const b = trail[i].foot;
-          if (!a || !b || trail[i].t - trail[i - 1].t > 0.3) continue;
+          // Never draw across a gap or a video cut: positions on either side are unrelated.
+          if (!a || !b || trail[i].t - trail[i - 1].t > 0.3 || trail[i].shot !== trail[i - 1].shot) continue;
           ctx.strokeStyle = `rgba(163,230,53,${(0.15 + 0.75 * (i / trail.length)).toFixed(2)})`;
           ctx.beginPath();
           ctx.moveTo(X(a[0]), Y(a[1]));

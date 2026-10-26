@@ -146,6 +146,15 @@ class ByteTracker:
         self.tracks: list[Track] = []
         self.frame_id = 0
         self._next_id = 1
+        self._shot_start = 1
+
+    def new_shot(self) -> None:
+        """Forget all tracks at a video cut, but keep ids unique across the whole video.
+
+        Positions on either side of a cut are unrelated, so no box may be associated across it.
+        """
+        self.tracks = []
+        self._shot_start = self.frame_id + 1
 
     @property
     def max_lost_frames(self) -> int:
@@ -217,8 +226,9 @@ class ByteTracker:
                 continue
             mean, cov = self.kf.initiate(xyxy_to_xyah(d.bbox))
             tr = Track(self._next_id, mean, cov, d.score, self.frame_id, self.frame_id, last_det_bbox=d.bbox.copy())
-            # Tracks born in the first frame are confirmed immediately, as in the reference code.
-            tr.confirmed = self.frame_id == 1
+            # Tracks born in the first frame (of the video or of a shot) are confirmed immediately, as in
+            # the reference code.
+            tr.confirmed = self.frame_id == self._shot_start
             self._next_id += 1
             self.tracks.append(tr)
             matched_ids.add(tr.track_id)

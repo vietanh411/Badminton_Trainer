@@ -36,6 +36,27 @@ export function QualityPanel({ m }: { m: MetricsResponse }) {
           <Row k="Tracking gaps ≥ 0.5 s" v={q.tracking_gaps} tone={q.tracking_gaps ? "warn" : "good"} />
           <Row k="People tracked" v={q.people_tracked} />
           <Row k="Player selection" v={q.selection.auto ? "automatic" : "chosen by user"} tone={q.selection.auto ? "warn" : undefined} />
+          {q.shots && q.shots.cuts > 0 && (
+            <>
+              <Row
+                k="Video cuts detected"
+                v={`${q.shots.cuts} (${q.shots.count} shots)`}
+                hint="Edited footage (e.g. highlights). The tracker restarts at every cut, nothing is connected across a cut, and the player is re-identified in each shot by appearance."
+              />
+              <Row
+                k="Shots used / excluded"
+                v={`${q.shots.used + q.shots.recalibrated} / ${q.shots.excluded}`}
+                hint="Excluded shots do not show the calibrated court view (close-ups, replays, graphics, crowd)."
+              />
+              <Row k="Player re-identified after cuts" v={q.shots.cross_cut_links} />
+              <Row
+                k="Shots where the player was not found"
+                v={q.shots.target_uncertain_shots}
+                tone={q.shots.target_uncertain_shots ? "warn" : "good"}
+                hint="Skipped rather than guessed when nobody, or more than one person, matched the player's appearance. Use an identity correction to assign the player in such a shot."
+              />
+            </>
+          )}
         </div>
         <div>
           <Row k="Calibration source" v={cal.source ?? "none"} tone={cal.source ? (cal.source.includes("unverified") ? "warn" : "good") : "bad"} />

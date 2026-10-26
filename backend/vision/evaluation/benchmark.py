@@ -75,7 +75,10 @@ def truth_to_annotations(truth: dict, every_s: float = 0.5) -> dict:
         "target_id": f"P{truth.get('target_player', 0)}",
         "frames": frames,
         "court_positions": [
-            {"t": fr["t"], "court_xy": next(p["court_xy"] for p in fr["people"] if p["id"] == "P0")} for fr in frames
+            {"t": fr["t"], "court_xy": p["court_xy"]}
+            for fr in frames
+            for p in fr["people"]
+            if p["id"] == f"P{truth.get('target_player', 0)}"
         ],
         "strokes": [
             {"t": s["t"], "shot_type": s["shot_type"], "stroke_side": s["stroke_side"]}

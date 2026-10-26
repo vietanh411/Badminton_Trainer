@@ -138,6 +138,17 @@ def resize_to_width(image: np.ndarray, max_width: int | None) -> tuple[np.ndarra
     return cv2.resize(image, (max_width, round(h * scale)), interpolation=cv2.INTER_AREA), scale
 
 
+def sample_step(source_fps: float, target_fps: float | None) -> int:
+    """Keep every n-th source frame so samples are evenly spaced (25 fps → 15 fps target gives 12.5 fps).
+
+    Picking frames by timestamp instead would alternate 1- and 2-frame gaps, and every smoother and
+    derivative downstream prefers uniform spacing.
+    """
+    if not target_fps or target_fps >= source_fps:
+        return 1
+    return max(1, int(source_fps / target_fps + 0.5))
+
+
 def iter_frames(
     path: str | Path,
     *,
@@ -147,7 +158,7 @@ def iter_frames(
     end_s: float | None = None,
     cancel: threading.Event | None = None,
 ) -> Iterator[Frame]:
-    """Yield frames sampled at roughly ``target_fps`` using real presentation timestamps.
+    """Yield every n-th frame (n = ``sample_step``, about ``target_fps``) with real presentation timestamps.
 
     Skipped frames are only ``grab``-bed (demuxed and decoded but not converted to BGR), which
     is noticeably cheaper than ``read``. Timestamps come from the decoder (``CAP_PROP_POS_MSEC``)
@@ -162,8 +173,8 @@ def iter_frames(
         if start_s > 0:
             cap.set(cv2.CAP_PROP_POS_MSEC, start_s * 1000.0)
         index = int(round(start_s * fps)) - 1
-        interval = 0.0 if not target_fps or target_fps >= fps else 1.0 / target_fps
-        next_t = start_s
+        step = sample_step(fps, target_fps)
+        decoded = -1
         last_t = -1.0
         sample_index = 0
         while True:
@@ -172,6 +183,7 @@ def iter_frames(
             if not cap.grab():
                 return
             index += 1
+            decoded += 1
             pos_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
             t = pos_ms / 1000.0 if pos_ms and pos_ms > 0 else index / fps
             if t <= last_t:  # non-monotonic or missing timestamps
@@ -179,9 +191,7 @@ def iter_frames(
             last_t = t
             if end_s is not None and t > end_s:
                 return
-            # Half a source-frame of tolerance: container timestamps are often rounded to the
-            # millisecond, and without it 30→15 fps sampling would skip frames irregularly.
-            if t + 0.5 / fps < next_t:
+            if decoded % step:
                 continue
             ok, frame = cap.retrieve()
             if not ok or frame is None:
@@ -189,9 +199,6 @@ def iter_frames(
             image, scale = resize_to_width(frame, max_width)
             yield Frame(index=index, sample_index=sample_index, timestamp_s=t, image=image, scale=scale)
             sample_index += 1
-            next_t = (next_t + interval) if interval else t
-            if interval and next_t < t:  # catch up after a long gap in timestamps
-                next_t = t + interval
     finally:
         cap.release()
 

@@ -93,8 +93,64 @@ person off the court, and then reports the analysis as uncalibrated.
   The user can override from any time ("from t the target is track k"), which re-runs only the cheap
   stages. Boxes of the target overlapping another person (IoU ≥ 0.15) are flagged `occluded`.
   Missing stretches ≥ 0.5 s become `tracking_gap` events and are **not** filled.
+* **Tracker identity swaps**: when two boxes overlap in the image (the near player running forward over
+  the far player's position) an IoU tracker can hand one identity to the other person. Before identity
+  resolution, every track is cut wherever its foot point moves faster than 10 m/s (+ 1 m slack); the
+  part after the cut becomes a separate fragment that motion and appearance then judge like any other.
 
-## 4. Pose estimation
+## 4. Edited footage: video cuts and shots
+
+Highlight reels splice rallies together. Across a cut the picture usually stays in the **same camera view**
+(the background barely changes) while the players jump to new positions. Treating the video as continuous
+would make the tracker either lose everyone (the analysed player becomes "a new person" after every cut)
+or connect unrelated positions (phantom sprints across the court). The pipeline therefore splits the video
+into **shots** and never connects anything across a shot boundary.
+
+**Cut detection** (`video/shots.py`, computed during the single decoding pass on a 160×90 thumbnail of
+every sampled frame; causal, so the tracker can be reset at the moment of the cut):
+
+| Cue | Rule (defaults) | Catches |
+|---|---|---|
+| Pixel-change spike | mean \|Δ\| of the grey thumbnail ≥ 0.009 *and* ≥ 3 × the median of the previous 6 samples | same-view cuts (players teleport) |
+| Local spike | mean of the 4 most-changed cells of a 16×9 grid ≥ 0.03 *and* ≥ 8 × its recent median | a player vanishing / appearing in one place |
+| Histogram jump | half-L1 change of the hue–saturation histogram ≥ 0.35 | switches to another camera, graphics, logo stings |
+| Tracker teleport | every identity is replaced at once, or a track ends and a same-looking new track starts > 1.5 body heights away in the next sample | cuts the picture cues miss (small players, flat backgrounds) |
+
+Continuous motion ramps up over several frames, while a cut is a one-frame spike; the absolute floors
+ignore video-codec keyframe flicker. Cuts closer than 0.25 s are merged.
+
+**Per-shot court view.** For every shot, a representative frame (0.4 s in) is checked against the session
+calibration: the share of projected court-line pixels that land on painted lines must be ≥ 45 %. If it is
+not (the broadcast camera zoomed or panned), automatic court detection is tried on that frame and, if it
+fits, the shot gets its own homography ("recalibrated"). Otherwise the shot is **excluded** — close-ups,
+replays, crowd shots and graphics contribute no positions, metrics or strokes, and are greyed out on the
+timeline. Shots shorter than 0.25 s are treated as transitions and excluded.
+
+**Identity across cuts** (`tracking/target.py`). Inside a shot the player is followed by motion as usual
+(§3). Across cuts positions say nothing, so the player is **re-identified by appearance**: an
+upper-body hue–saturation model built from the shot the user clicked in is compared with every
+person tracked in each other usable shot (court side as a weak prior). The best match is accepted only
+if its appearance distance is ≤ 0.40 *and* it beats the runner-up by ≥ 0.06; otherwise the shot is
+reported as "player not found" rather than guessed, because assigning the wrong player would silently
+corrupt every metric. Shots are visited outward from the clicked shot and the model is updated slowly
+(10 % per accepted shot) to follow lighting drift. Manual corrections apply until the end of the shot
+they were made in.
+
+**Downstream.** Trajectory filtering, interpolation, smoothing, segments and derivatives run per shot;
+distance, speed, direction changes and excursions never span a cut; stroke detection runs per shot with
+the handedness estimated from the whole video (a landmark jump at a cut would otherwise look like the
+fastest swing in the video); coverage is reported relative to the time that shows the court.
+
+**Validation.** On a 10.6-minute broadcast highlight video (1080p, 25 fps, fixed camera behind one
+baseline), a full-frame-rate, two-sided reference detector plus visual inspection of 9 disputed frame pairs
+gave 38 same-view cuts. At 15 analysis fps the causal detector found 38/38 with no false cuts (37/38 at
+10 fps). The thresholds were tuned on this same video, so these numbers are optimistic for other footage.
+The synthetic test (`tests/test_cuts.py`) checks the guarantees end to end: tracker ids never span a cut,
+the player is re-identified in every rally segment with no frame assigned to the wrong person, distance
+equals the truth summed per segment (no teleport distance), excluded graphics contain no positions, and
+no stroke can peak at a cut.
+
+## 5. Pose estimation
 
 MediaPipe Pose Landmarker (lite/full/heavy by performance mode) runs on a crop around the target box
 expanded by 25 % and widened to an aspect ≥ 0.75 so raised arms and the racket stay in view.
@@ -109,7 +165,7 @@ stance width and hip-over-ankles offset in torso lengths. All are **2-D monocula
 follow relative change within a session but are not calibrated anatomical angles, and nothing in the
 app makes medical or injury judgements.
 
-## 5. Court position of the player
+## 6. Court position of the player
 
 Only floor points may go through `H`. Per frame (`trajectory/position.py`):
 
@@ -123,7 +179,7 @@ Feet outside the (slightly expanded) lower half of the box are treated as pose d
 Hip or torso keypoints are never projected: being ~1 m above the floor, they would shift the
 position by metres depending on camera height.
 
-## 6. Trajectory processing
+## 7. Trajectory processing
 
 `trajectory/filtering.py`, applied to the per-sample raw court positions; raw values are kept next to
 the filtered ones, and every rejected sample records why:
@@ -133,21 +189,27 @@ the filtered ones, and every rejected sample records why:
 | Bounds | reject positions > 1.5 m outside the doubles court (`out_of_bounds`) |
 | Confidence | reject position confidence < 0.25 (`low_confidence`) |
 | Outliers | residual from a 0.6 s rolling median > max(0.6 m, 5 × MAD) (`outlier`) |
-| Speed gate | step from the last accepted point faster than 8 m/s + 0.25 m (`speed_gate`); resets after 3 rejections or a long gap |
+| Speed gate | step from the last accepted point faster than 8 m/s + 0.25 m (`speed_gate`); if the new location persists for > 3 samples it is accepted **as the start of a new segment**, so the unobserved path is never drawn as a sprint |
 | Segments | consecutive valid samples whose gaps ≤ 0.4 s form a segment |
 | Interpolation | linear, **only inside segments** (gaps ≤ 0.4 s), flagged `interpolated` |
-| Smoothing | Savitzky–Golay, window 0.5 s, polynomial order 2, per segment |
-| Derivatives | `np.gradient` on real timestamps per segment → velocity, speed, acceleration, tangential acceleration |
+| Smoothing | constant-velocity Kalman filter + Rauch–Tung–Striebel smoother per segment: measurement σ = 0.12 m ÷ position confidence, white-noise acceleration density q = 30 m²/s³; handles uneven time steps and bridges interpolated samples (Savitzky–Golay, 0.5 s, order 2, remains selectable) |
+| Derivatives | velocity from the smoother's state (Savitzky–Golay: `np.gradient` on real timestamps); acceleration and tangential acceleration by differentiating velocity |
 
-Frame sampling uses decoder timestamps with half-a-frame tolerance, so 30 → 15 fps sampling is
-uniform even when container timestamps are rounded; irregular spacing (variable-frame-rate phone
-video) is handled because every derivative and weight uses actual timestamps.
+Frames are sampled as every n-th source frame with n = round(source fps ÷ requested fps), so samples
+are evenly spaced (30 fps → 15 fps; 25 fps → 12.5 fps rather than an alternating 0.04 / 0.08 s pattern);
+the effective rate is reported. Timestamps still come from the decoder, so variable-frame-rate phone video
+is handled: every derivative, smoother step and time weight uses actual timestamps.
+
+*Why Kalman:* on a real broadcast video the foot point jitters by about 10 cm in depth from frame to frame
+(monocular pose of a moving, partly airborne player). Differentiating a Savitzky–Golay fit of that signal
+on uneven time steps produced a 95th-percentile speed of 6.6 m/s; the Kalman smoother gives 4.8 m/s on the
+same positions while matching the Savitzky–Golay accuracy on the synthetic benchmark.
 
 **Sample weights.** Each valid sample represents the time until the next sample in the same segment,
 capped at 1.5 × the median frame interval. Gaps therefore contribute nothing, and a 60 fps and a
 15 fps recording of the same movement produce the same time totals.
 
-## 7. Movement metrics (`analytics/movement.py`)
+## 8. Movement metrics (`analytics/movement.py`)
 
 | Metric | Definition |
 |---|---|
@@ -198,7 +260,7 @@ The normalisation constants are judgement calls, not fitted to expert ratings. T
 validated measure of footwork efficiency; it is only meaningful for comparing one player's sessions
 recorded with the same camera setup.
 
-## 8. Heatmaps (`analytics/heatmap.py`)
+## 9. Heatmaps (`analytics/heatmap.py`)
 
 1. Weighted 2-D histogram of filtered positions on a metric grid (default 0.10 m cells, grid extends
    1.5 m beyond the court), where each sample's weight is its observed seconds.
@@ -213,7 +275,7 @@ Interval (time range, first/second half) and zone (front/mid/rear) variants are 
 from the stored positions. Without a valid calibration, metric heatmaps are disabled and the API and
 UI say why.
 
-## 9. Strokes
+## 10. Strokes
 
 **Layer A — event detection (supported).** Landmarks are expressed relative to the hip midpoint in
 torso lengths (rolling-median scale), so thresholds do not depend on distance to the camera. The
@@ -242,9 +304,10 @@ error; it is saved as a model card next to the model. Predictions below 0.6 prob
 `uncertain`. No trained model ships with the repository; `scripts/train_stroke_classifier.py` trains one
 from strokes labelled in the app.
 
-## 10. Known limitations
+## 11. Known limitations
 
-* **Single fixed camera.** Camera motion invalidates the homography; the app does not stabilise video.
+* **Fixed camera within a shot.** Camera motion *during* a shot invalidates the homography (the app does not
+  stabilise video); a camera that moves *between* cuts is handled by per-shot recalibration or exclusion (§4).
   BoT-SORT's camera-motion compensation helps tracking but not calibration.
 * **Feet must be visible.** When they are not, positions fall back to the box bottom (less accurate)
   and the confidence drops; far-side players are small, so their positions are noisier.

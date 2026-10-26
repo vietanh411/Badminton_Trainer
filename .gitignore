@@ -35,3 +35,11 @@ yolo*.pt
 Thumbs.db
 .vscode/
 .idea/
+
+# Footage is never committed (size, copyright, privacy)
+*.mp4
+*.mov
+*.m4v
+*.mkv
+*.avi
+*.webm

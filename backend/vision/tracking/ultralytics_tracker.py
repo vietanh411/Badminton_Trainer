@@ -32,6 +32,16 @@ class UltralyticsTracker:
         self.imgsz = imgsz
         self.device = device or auto_device()
         self.name = f"ultralytics-{tracker}"
+        self._id_offset = 0
+        self._max_id = 0
+
+    def new_shot(self) -> None:
+        """Reset Ultralytics' tracker state at a cut, keeping ids unique across shots."""
+        predictor = getattr(self.model, "predictor", None)
+        for trk in getattr(predictor, "trackers", None) or []:
+            if hasattr(trk, "reset"):
+                trk.reset()
+        self._id_offset = self._max_id
 
     def step(self, frame: Frame) -> tuple[list[Detection], list[TrackOutput]]:
         res = self.model.track(
@@ -51,7 +61,13 @@ class UltralyticsTracker:
         conf = boxes.conf.cpu().numpy().astype(float)
         ids = boxes.id.cpu().numpy().astype(int) if boxes.id is not None else np.full(len(xyxy), -1)
         dets = [Detection(b, float(c)) for b, c in zip(xyxy, conf, strict=True)]
-        outs = [TrackOutput(int(i), b, float(c), True) for b, c, i in zip(xyxy, conf, ids, strict=True) if i >= 0]
+        outs = [
+            TrackOutput(int(i) + self._id_offset, b, float(c), True)
+            for b, c, i in zip(xyxy, conf, ids, strict=True)
+            if i >= 0
+        ]
+        if outs:
+            self._max_id = max(self._max_id, *(o.track_id for o in outs))
         return dets, outs
 
     def close(self) -> None:

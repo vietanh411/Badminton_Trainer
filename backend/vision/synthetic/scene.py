@@ -539,3 +539,92 @@ def court_keypoint_pixels(cam: Camera, ids: list[str]) -> np.ndarray:
     pts = np.array([[keypoint_by_id(k).x, keypoint_by_id(k).y, 0.0] for k in ids])
     uv, _ = cam.project(pts)
     return uv
+
+
+def _graphic_frame(width: int, height: int, k: int) -> np.ndarray:
+    """A broadcast-style interstitial (replay sting / logo) with no court in it."""
+    img = np.zeros((height, width, 3), np.uint8)
+    img[:] = (40 + (k * 3) % 40, 20, 60)
+    cv2.putText(
+        img,
+        "REPLAY",
+        (width // 4, height // 2),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        width / 400,
+        (240, 240, 240),
+        max(2, width // 200),
+        cv2.LINE_AA,
+    )
+    return img
+
+
+def write_edited_scene(
+    stem: str | Path,
+    seeds: list[int],
+    segment_s: float = 4.0,
+    fps: float = 30.0,
+    width: int = 640,
+    height: int = 360,
+    graphic_after: int | None = 1,
+    graphic_s: float = 1.0,
+) -> tuple[Path, Path, list[float]]:
+    """Highlight-style edit: rally segments from the same camera cut together (players jump between
+    positions at each cut), optionally with a non-court graphic spliced in after segment ``graphic_after``.
+
+    Returns (video path, truth path, cut times). Truth frames of the graphic have no players.
+    """
+    from vision.video.writer import open_writer
+
+    writer, path, _ = open_writer(stem, fps, (width, height))
+    frames: list[dict] = []
+    strokes: list[dict] = []
+    cuts: list[float] = []
+    k = 0
+    cam = None
+    try:
+        rng = np.random.default_rng(sum(seeds))
+        for si, seed in enumerate(seeds):
+            # Highlights cut in mid-rally: start each segment 1.5–4 s into its own simulated rally, so
+            # the players are somewhere else entirely when the picture cuts.
+            skip = int(rng.uniform(1.5, 4.0) * fps)
+            scene = make_scene(duration=segment_s + skip / fps, fps=fps, width=width, height=height, seed=seed)
+            cam = scene.camera
+            if k:
+                cuts.append(round(k / fps, 4))
+            t_off = k / fps - skip / fps
+            for i in range(skip, scene.n_frames):
+                writer.write(scene.render(i))
+                frames.append(
+                    {"frame_index": k, "t": round(k / fps, 4), "players": scene.frame_truth(i), "segment": si}
+                )
+                k += 1
+            strokes += [
+                {**s.__dict__, "t": round(s.t + t_off, 3)}
+                for tl in scene.players
+                for s in tl.strokes
+                if s.t >= skip / fps
+            ]
+            if graphic_after is not None and si == graphic_after:
+                cuts.append(round(k / fps, 4))
+                for j in range(int(graphic_s * fps)):
+                    writer.write(_graphic_frame(width, height, j))
+                    frames.append({"frame_index": k, "t": round(k / fps, 4), "players": [], "segment": None})
+                    k += 1
+    finally:
+        writer.release()
+    truth = {
+        "synthetic": True,
+        "description": "Synthetic edited (highlight-style) video with cuts. Not real athletic data.",
+        "fps": fps,
+        "duration_s": k / fps,
+        "width": width,
+        "height": height,
+        "homography_image_to_court": cam.homography.tolist(),
+        "target_player": 0,
+        "cuts": cuts,
+        "frames": frames,
+        "strokes": strokes,
+    }
+    truth_path = Path(str(stem) + ".truth.json")
+    truth_path.write_text(json.dumps(truth))
+    return path, truth_path, cuts

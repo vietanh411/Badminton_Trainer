@@ -39,6 +39,12 @@ class TargetConfig:
     switch_speed_mps: float = 10.0
     occlusion_iou: float = 0.15
     min_gap_event_s: float = 0.5
+    # Re-identification across video cuts (positions are unrelated across a cut, so only appearance
+    # and court side are used).
+    max_shot_link_appearance: float = 0.40
+    min_shot_link_margin: float = 0.06
+    shot_side_penalty: float = 0.10
+    min_shot_track_samples: int = 3
 
 
 @dataclass
@@ -100,21 +106,26 @@ def _summaries(tracks: pd.DataFrame, app: np.ndarray) -> dict[int, dict]:
             "h1": float(g["y2"].iloc[-1] - g["y1"].iloc[-1]),
             "app0": app[idx[:k]].mean(axis=0),
             "app1": app[idx[-k:]].mean(axis=0),
+            "app_all": app[idx].mean(axis=0),
             "n": len(g),
+            "shot": int(g["shot"].iloc[0]) if "shot" in g else 0,
+            "foot_med": np.median(_foot(g), axis=0),
         }
     return out
 
 
 def _chain(
-    seed: int, summ: dict[int, dict], H, cfg: TargetConfig, forward: bool, events: list, used: set[int]
+    seed: int, summ: dict[int, dict], H_by_shot: dict, cfg: TargetConfig, forward: bool, events: list, used: set[int]
 ) -> list[int]:
+    """Follow the target through tracker fragments *within one shot* (never across a cut)."""
     chain = [seed]
     cur = seed
     while True:
         s = summ[cur]
+        H = H_by_shot.get(s["shot"])
         best = None
         for tid, c in summ.items():
-            if tid in used or tid == cur:
+            if tid in used or tid == cur or c["shot"] != s["shot"]:
                 continue
             gap = (c["t0"] - s["t1"]) if forward else (s["t0"] - c["t1"])
             if gap < -0.15 or gap > cfg.max_gap_s:
@@ -160,6 +171,8 @@ def resolve_target(
     selection: dict,
     *,
     H: np.ndarray | None = None,
+    H_by_shot: dict[int, np.ndarray | None] | None = None,
+    excluded_shots: dict[int, str] | None = None,
     corrections: list[dict] | None = None,
     config: TargetConfig | None = None,
 ) -> TargetResult:
@@ -169,12 +182,25 @@ def resolve_target(
     ``appearance`` rows. ``samples``: every sampled frame (sample_index, frame_index, t).
     ``selection``: {"t": seconds, "bbox": [x1, y1, x2, y2]} in analysis-frame pixels.
     ``corrections``: [{"t": seconds, "track_id": int | None}] — None marks "target not visible".
+
+    Edited footage: ``samples`` and ``tracks`` carry a ``shot`` column. Identity is followed by motion
+    inside a shot and re-identified by appearance across cuts. ``excluded_shots`` maps shots that do
+    not show the calibrated court view to the reason; ``H_by_shot`` gives each shot's homography
+    (default: ``H`` everywhere). A correction applies until the next correction or the end of its shot.
     """
     cfg = config or TargetConfig()
     tracks = tracks.reset_index(drop=True)
     events: list[dict] = []
     samples = samples.sort_values("sample_index").reset_index(drop=True)
-    out = samples[["sample_index", "frame_index", "t"]].copy()
+    if "shot" not in samples:
+        samples = samples.assign(shot=0)
+    if "shot" not in tracks:
+        tracks = tracks.assign(shot=0)
+    excluded_shots = excluded_shots or {}
+    shot_ids = sorted(int(x) for x in samples["shot"].unique())
+    if H_by_shot is None:
+        H_by_shot = {sh: H for sh in shot_ids}
+    out = samples[["sample_index", "frame_index", "t", "shot"]].copy()
     for col in ("track_id",):
         out[col] = pd.array([pd.NA] * len(out), dtype="Int64")
     for col in ("x1", "y1", "x2", "y2", "score", "max_overlap_iou"):
@@ -186,13 +212,16 @@ def resolve_target(
     summ = _summaries(tracks, appearance)
     seed = select_seed(tracks, float(selection["t"]), np.asarray(selection["bbox"], float))
 
-    def build_assignment(seed_tid: int) -> dict[int, int]:
+    def chain_in_shot(seed_tid: int) -> list[int]:
         used = {seed_tid}
-        fwd = _chain(seed_tid, summ, H, cfg, True, events, used)
-        bwd = _chain(seed_tid, summ, H, cfg, False, events, used)
-        return {tid: i for i, tid in enumerate(bwd[::-1] + fwd[1:])}
+        fwd = _chain(seed_tid, summ, H_by_shot, cfg, True, events, used)
+        bwd = _chain(seed_tid, summ, H_by_shot, cfg, False, events, used)
+        return bwd[::-1] + fwd[1:]
 
-    chain_ids = build_assignment(seed)
+    chain_ids = chain_in_shot(seed)
+    chain_ids += _link_across_shots(
+        seed, chain_ids, summ, shot_ids, excluded_shots, H_by_shot, cfg, events, chain_in_shot, samples
+    )
     # Per-sample assignment: track id owning the target at each time.
     assigned = pd.Series(pd.NA, index=out.index, dtype="Int64")
     by_track = {int(tid): g for tid, g in tracks.groupby("track_id")}
@@ -206,6 +235,9 @@ def resolve_target(
         t0 = float(corr["t"])
         later = [c["t"] for c in (corrections or []) if c["t"] > t0]
         t1 = min(later) if later else np.inf
+        # Never past the end of the shot the correction was made in.
+        at = out.loc[(out["t"] - t0).abs().idxmin(), "shot"]
+        t1 = min(t1, float(out.loc[out["shot"] == at, "t"].max()) + 1e-6)
         span = (out["t"] >= t0 - 1e-6) & (out["t"] < t1)
         assigned[span] = pd.NA
         tid = corr.get("track_id")
@@ -215,7 +247,7 @@ def resolve_target(
         if int(tid) not in by_track:
             raise TargetSelectionError(f"track {tid} does not exist")
         local_used = {int(tid)}
-        fwd = _chain(int(tid), summ, H, cfg, True, events, local_used)
+        fwd = _chain(int(tid), summ, H_by_shot, cfg, True, events, local_used)
         for ftid in fwd:
             g = by_track[ftid]
             m = span & out["sample_index"].isin(g["sample_index"]) & assigned.isna()
@@ -229,6 +261,8 @@ def resolve_target(
     out = out.drop(columns=["x1", "y1", "x2", "y2", "score"]).merge(boxes, how="left", on=["sample_index", "track_id"])
     has = out["track_id"].notna().to_numpy()
     out.loc[has, "status"] = "tracked"
+    if excluded_shots:
+        out.loc[out["shot"].isin(list(excluded_shots)).to_numpy() & ~has, "status"] = "excluded_shot"
 
     # Overlap with other people (partial occlusion), vectorised per (target, other) pair.
     tgt = out.loc[has, ["sample_index", "track_id", "x1", "y1", "x2", "y2"]]
@@ -256,13 +290,15 @@ def resolve_target(
     linked_mask = out["track_id"].notna() & (out["track_id"] != seed)
     out.loc[linked_mask & (out["status"] == "tracked"), "status"] = "linked"
 
-    events.extend(_switch_flags(out, tracks, appearance, H, cfg))
+    events.extend(_switch_flags(out, tracks, appearance, H_by_shot, cfg))
     events.extend(_gap_events(out, cfg))
     events.sort(key=lambda e: e["t"])
     return TargetResult(frames=out, events=events, seed_track=seed)
 
 
-def _switch_flags(out: pd.DataFrame, tracks: pd.DataFrame, app: np.ndarray, H, cfg: TargetConfig) -> list[dict]:
+def _switch_flags(
+    out: pd.DataFrame, tracks: pd.DataFrame, app: np.ndarray, H_by_shot: dict, cfg: TargetConfig
+) -> list[dict]:
     """Flag frames where the same track id suddenly looks or moves like someone else."""
     events = []
     idx_lookup = {
@@ -277,6 +313,7 @@ def _switch_flags(out: pd.DataFrame, tracks: pd.DataFrame, app: np.ndarray, H, c
         foot = _foot(g)
         t = g["t"].to_numpy()
         h = (g["y2"] - g["y1"]).to_numpy()
+        H = H_by_shot.get(int(g["shot"].iloc[0]))  # a tracker id never spans a cut
         for k in range(6, len(g) - 6):
             before = A[k - 6 : k].mean(axis=0)
             after = A[k : k + 6].mean(axis=0)
@@ -303,8 +340,10 @@ def _switch_flags(out: pd.DataFrame, tracks: pd.DataFrame, app: np.ndarray, H, c
 
 
 def _gap_events(out: pd.DataFrame, cfg: TargetConfig) -> list[dict]:
+    """Missing stretches inside a usable shot (excluded shots and cuts are not tracking failures)."""
     events = []
-    missing = out["track_id"].isna().to_numpy()
+    missing = (out["track_id"].isna() & (out["status"] != "excluded_shot")).to_numpy()
+    shot = out["shot"].to_numpy()
     t = out["t"].to_numpy()
     i = 0
     n = len(out)
@@ -313,10 +352,10 @@ def _gap_events(out: pd.DataFrame, cfg: TargetConfig) -> list[dict]:
             i += 1
             continue
         j = i
-        while j + 1 < n and missing[j + 1]:
+        while j + 1 < n and missing[j + 1] and shot[j + 1] == shot[i]:
             j += 1
-        start = t[i - 1] if i > 0 else t[i]
-        end = t[j + 1] if j + 1 < n else t[j]
+        start = t[i - 1] if i > 0 and shot[i - 1] == shot[i] else t[i]
+        end = t[j + 1] if j + 1 < n and shot[j + 1] == shot[i] else t[j]
         if end - start >= cfg.min_gap_event_s:
             events.append(
                 {
@@ -328,3 +367,129 @@ def _gap_events(out: pd.DataFrame, cfg: TargetConfig) -> list[dict]:
             )
         i = j + 1
     return events
+
+
+def _link_across_shots(
+    seed, seed_chain, summ, shot_ids, excluded_shots, H_by_shot, cfg: TargetConfig, events, chain_in_shot, samples
+) -> list[int]:
+    """Find the target again in every other usable shot, by appearance (court side is a weak prior).
+
+    Shots are visited outward from the seed shot and the appearance model is updated slowly with each
+    accepted shot, so gradual lighting changes are followed. A shot is skipped, and reported, when the
+    best match is not clearly better than the second best: assigning the wrong player would silently
+    corrupt every metric, while a skipped shot only means less data.
+    """
+    from vision.geometry.court import NET_Y
+
+    seed_shot = summ[seed]["shot"]
+    weights = np.array([summ[t]["n"] for t in seed_chain], float)
+    model = np.average(np.array([summ[t]["app_all"] for t in seed_chain]), axis=0, weights=weights)
+
+    def side(tid: int) -> int | None:
+        H = H_by_shot.get(summ[tid]["shot"])
+        if H is None:
+            return None
+        y = project(H, summ[tid]["foot_med"][None])[0, 1]
+        return None if not np.isfinite(y) else int(y >= NET_Y)
+
+    sides = [v for v in (side(t) for t in seed_chain) if v is not None]
+    target_side = max(set(sides), key=sides.count) if sides else None
+    shot_start = samples.groupby("shot")["t"].min()
+    linked: list[int] = []
+    for sh in sorted((x for x in shot_ids if x != seed_shot), key=lambda x: (abs(x - seed_shot), x)):
+        t0 = round(float(shot_start.get(sh, 0.0)), 3)
+        if sh in excluded_shots:
+            continue
+        cands = [tid for tid, c in summ.items() if c["shot"] == sh and c["n"] >= cfg.min_shot_track_samples]
+        if not cands:
+            events.append(
+                {"type": "shot_target_uncertain", "t": t0, "shot": sh, "reason": "nobody tracked in this shot"}
+            )
+            continue
+        scored = []
+        for tid in cands:
+            d = appearance_distance(model, summ[tid]["app_all"])
+            sd = side(tid)
+            other_side = target_side is not None and sd is not None and sd != target_side
+            scored.append((d + (cfg.shot_side_penalty if other_side else 0.0), d, tid))
+        scored.sort()
+        best_score, best_d, best_tid = scored[0]
+        # Only people visible at the same time as the best match are rivals; a non-overlapping
+        # candidate is usually another tracker fragment of the same player (chained below anyway).
+        b = summ[best_tid]
+        rivals = [sc for sc, _d, tid in scored[1:] if summ[tid]["t0"] <= b["t1"] and summ[tid]["t1"] >= b["t0"]]
+        margin = (rivals[0] - best_score) if rivals else 1.0
+        if best_d > cfg.max_shot_link_appearance or margin < cfg.min_shot_link_margin:
+            events.append(
+                {
+                    "type": "shot_target_uncertain",
+                    "t": t0,
+                    "shot": sh,
+                    "reason": "no candidate looks like the target"
+                    if best_d > cfg.max_shot_link_appearance
+                    else "two people match the target's appearance about equally",
+                    "best_appearance_distance": round(best_d, 3),
+                    "margin": round(margin, 3),
+                }
+            )
+            continue
+        linked.extend(chain_in_shot(best_tid))
+        conf = (1 - best_d / cfg.max_shot_link_appearance) * 0.6 + min(margin, 0.3) / 0.3 * 0.4
+        events.append(
+            {
+                "type": "shot_link",
+                "t": t0,
+                "shot": sh,
+                "to_track": int(best_tid),
+                "appearance_distance": round(best_d, 3),
+                "margin": round(margin, 3),
+                "confidence": round(float(np.clip(conf, 0.05, 0.99)), 3),
+            }
+        )
+        model = 0.9 * model + 0.1 * summ[best_tid]["app_all"]
+    return linked
+
+
+def split_tracks_at_jumps(
+    tracks: pd.DataFrame,
+    H_by_shot: dict,
+    max_speed_mps: float = 10.0,
+    slack_m: float = 1.0,
+    min_image_jump: float = 0.4,
+) -> tuple[pd.DataFrame, int]:
+    """Give a new tracker id to the part of a track after a physically impossible jump.
+
+    IoU trackers occasionally hand an identity from one player to another when their boxes overlap in
+    the image (the near player running forward over the far player's position). After the split the
+    two parts are ordinary fragments: motion and appearance decide which one is the analysed player.
+
+    Both conditions must hold: the court position moves faster than ``max_speed_mps`` (+ slack) *and*
+    the foot point moves at least ``min_image_jump`` box heights in the image. The second guard matters
+    for small, distant players, where one pixel of box jitter is a large change in depth.
+    Returns (tracks with new ids, number of splits). Row order and index are preserved.
+    """
+    if tracks.empty:
+        return tracks, 0
+    out = tracks.copy()
+    next_id = int(out["track_id"].max()) + 1
+    splits = 0
+    foot = np.column_stack([(out["x1"] + out["x2"]) / 2, out["y2"]])
+    for _tid, g in out.groupby("track_id"):
+        g = g.sort_values("t")
+        H = H_by_shot.get(int(g["shot"].iloc[0])) if "shot" in g else next(iter(H_by_shot.values()), None)
+        idx = g.index.to_numpy()
+        f = foot[out.index.get_indexer(idx)]
+        h = (g["y2"] - g["y1"]).to_numpy()
+        t = g["t"].to_numpy()
+        cut_at = []
+        for k in range(1, len(idx)):
+            dt = max(t[k] - t[k - 1], 1e-3)
+            dist = _distance_m(f[k - 1], f[k], h[k - 1], H)
+            img_jump = float(np.linalg.norm(f[k] - f[k - 1]) / max(h[k - 1], 1.0))
+            if dist > max_speed_mps * dt + slack_m and img_jump >= min_image_jump:
+                cut_at.append(k)
+        for k in cut_at:
+            out.loc[idx[k:], "track_id"] = next_id
+            next_id += 1
+            splits += 1
+    return out, splits

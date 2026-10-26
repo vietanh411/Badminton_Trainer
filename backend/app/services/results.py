@@ -170,6 +170,7 @@ def annotations_payload(res: dict, start: float, end: float) -> dict:
     pose_ok = np.isfinite(xy).all(axis=(1, 2))
     pose_arr = np.round(np.concatenate([xy, vis[..., None]], axis=2), 2)
     sample = pos["sample_index"].to_numpy()[idx].tolist()
+    shot = pos["shot"].to_numpy()[idx].tolist() if "shot" in pos else [0] * len(idx)
     tid = pos["track_id"].to_numpy(dtype=object)[idx]
     status = pos["status"].to_numpy(dtype=object)[idx].tolist()
     src = pos["position_source"].to_numpy(dtype=object)[idx].tolist()
@@ -189,6 +190,7 @@ def annotations_payload(res: dict, start: float, end: float) -> dict:
             "foot": None if fx[k] is None else [fx[k], fy[k]],
             "src": src[k],
             "conf": conf[k],
+            "shot": int(shot[k]),
         }
         if has_court:
             f["court"] = None if cx[k] is None else [cx[k], cy[k]]
