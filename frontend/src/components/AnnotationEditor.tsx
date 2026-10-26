@@ -60,8 +60,14 @@ export function AnnotationEditor({ sessionId, videoId, width, height, duration }
   );
 
   const toImage = (e: React.PointerEvent): [number, number] => {
-    const rect = svgRef.current!.getBoundingClientRect();
-    return clientToImage(e.clientX, e.clientY, rect, width, height);
+    const svg = svgRef.current!;
+    // Exact mapping through the SVG's screen transform (robust to letterboxing and CSS scaling).
+    const ctm = svg.getScreenCTM();
+    if (ctm) {
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+      return [Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10];
+    }
+    return clientToImage(e.clientX, e.clientY, svg.getBoundingClientRect(), width, height);
   };
 
   const onDown = (e: React.PointerEvent) => {
@@ -80,9 +86,13 @@ export function AnnotationEditor({ sessionId, videoId, width, height, duration }
   const onMove = (e: React.PointerEvent) => {
     if (drag) setDrag({ ...drag, b: toImage(e) });
   };
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
   const onUp = () => {
-    if (!drag || !doc) return;
-    const b = boxFromDrag(drag.a, drag.b, width, height);
+    const d = dragRef.current;
+    if (!d || !doc) return;
+    const b = boxFromDrag(d.a, d.b, width, height);
+    dragRef.current = null;
     setDrag(null);
     if (!b) return;
     const id = nextPersonId(doc);
@@ -90,6 +100,21 @@ export function AnnotationEditor({ sessionId, videoId, width, height, duration }
     setSel(frame ? frame.people.length : 0);
     setMode("select");
   };
+
+  // Finish a drag even when the pointer is released outside the image.
+  const onUpRef = useRef(onUp);
+  onUpRef.current = onUp;
+  const dragging = drag !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const up = () => onUpRef.current();
+    window.addEventListener("pointerup", up);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [dragging]);
 
   const go = (k: number) => {
     if (!doc) return;
@@ -206,7 +231,7 @@ export function AnnotationEditor({ sessionId, videoId, width, height, duration }
                 className={cx("absolute inset-0 h-full w-full", mode === "select" ? "cursor-pointer" : "cursor-crosshair")}
                 onPointerDown={onDown}
                 onPointerMove={onMove}
-                onPointerUp={onUp}
+                
               >
                 {frame.people.map((p, i) => {
                   const [x1, y1, x2, y2] = p.bbox;

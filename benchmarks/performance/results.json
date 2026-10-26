@@ -1,0 +1,173 @@
+{
+ "date": "2026-10-25",
+ "device": {
+  "cpu": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+  "cores": 8,
+  "threads": 16,
+  "ram_gb": 16.5,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.0",
+  "cuda": false,
+  "gpu": null,
+  "torch": "2.14.1+cpu"
+ },
+ "components": {
+  "yolo11n.pt @ 640px (cpu)": {
+   "mean_ms": 71.55572999618016,
+   "p50_ms": 67.26060004439205,
+   "p95_ms": 100.35455494653434,
+   "n": 20
+  },
+  "yolo11s.pt @ 960px (cpu)": {
+   "mean_ms": 261.1364750075154,
+   "p50_ms": 250.1047500409186,
+   "p95_ms": 311.7586550011765,
+   "n": 20
+  },
+  "MediaPipe EfficientDet-Lite0 (cpu)": {
+   "mean_ms": 54.6282300085295,
+   "p50_ms": 53.4538000356406,
+   "p95_ms": 67.67244010115974,
+   "n": 20
+  },
+  "pose_landmarker_lite on one player crop (cpu)": {
+   "mean_ms": 38.957835000474006,
+   "p50_ms": 39.01904996018857,
+   "p95_ms": 47.977134940447286,
+   "n": 20
+  },
+  "pose_landmarker_full on one player crop (cpu)": {
+   "mean_ms": 44.831935002002865,
+   "p50_ms": 43.83994999807328,
+   "p95_ms": 54.976789967622615,
+   "n": 20
+  },
+  "pose_landmarker_heavy on one player crop (cpu)": {
+   "mean_ms": 100.47610499314032,
+   "p50_ms": 100.05984996678308,
+   "p95_ms": 110.55633499054238,
+   "n": 20
+  }
+ },
+ "end_to_end": {
+  "fast": {
+   "video_s": 20.0,
+   "analysis_fps": 10.0,
+   "frames_analysed": 200,
+   "wall_s": 24.172233000048436,
+   "realtime_factor": 1.2086116500024218,
+   "frames_per_s": 8.273956320030477,
+   "stage_s": {
+    "validating": 0.1192471981048584,
+    "calibrating": 1.412909984588623,
+    "detecting": 14.679809093475342,
+    "tracking": 0.056455135345458984,
+    "pose": 7.86067271232605,
+    "analyzing": 0.014872312545776367,
+    "rendering": 0.024858474731445312,
+    "total": 24.168824911117554
+   },
+   "peak_rss_mb": 701.206528,
+   "rss_increase_mb": 143.826944,
+   "gpu_peak_mb": null,
+   "results_mb": 0.180073,
+   "results_mb_per_video_min": 0.5402190000000001
+  },
+  "balanced": {
+   "video_s": 20.0,
+   "analysis_fps": 15.0,
+   "frames_analysed": 300,
+   "wall_s": 42.85082599997986,
+   "realtime_factor": 2.1425412999989932,
+   "frames_per_s": 7.001031905432605,
+   "stage_s": {
+    "validating": 0.10469579696655273,
+    "calibrating": 1.357194423675537,
+    "detecting": 25.379125356674194,
+    "tracking": 0.05506134033203125,
+    "pose": 15.895829916000366,
+    "analyzing": 0.020171403884887695,
+    "rendering": 0.03493523597717285,
+    "total": 42.84701347351074
+   },
+   "peak_rss_mb": 725.2992,
+   "rss_increase_mb": 170.237952,
+   "gpu_peak_mb": null,
+   "results_mb": 0.258182,
+   "results_mb_per_video_min": 0.7745460000000001
+  },
+  "accurate": {
+   "video_s": 20.0,
+   "analysis_fps": 30.0,
+   "frames_analysed": 600,
+   "wall_s": 196.44916690001264,
+   "realtime_factor": 9.822458345000632,
+   "frames_per_s": 3.0542252200305025,
+   "stage_s": {
+    "validating": 0.09843826293945312,
+    "calibrating": 1.8871502876281738,
+    "detecting": 144.56774425506592,
+    "tracking": 0.07682609558105469,
+    "pose": 49.754947662353516,
+    "analyzing": 0.025159597396850586,
+    "rendering": 0.03556966781616211,
+    "total": 196.44583582878113
+   },
+   "peak_rss_mb": 898.236416,
+   "rss_increase_mb": 323.108864,
+   "gpu_peak_mb": null,
+   "results_mb": 0.504177,
+   "results_mb_per_video_min": 1.512531
+  }
+ },
+ "api": {
+  "GET /sessions": {
+   "mean_ms": 8.255893333504597,
+   "p50_ms": 8.259199908934534,
+   "p95_ms": 9.52069000340998,
+   "n": 15
+  },
+  "GET /sessions/{id}/metrics": {
+   "mean_ms": 11.83598666296651,
+   "p50_ms": 11.2381000071764,
+   "p95_ms": 14.201830001547933,
+   "n": 15
+  },
+  "GET /sessions/{id}/heatmap (json)": {
+   "mean_ms": 37.52277999495467,
+   "p50_ms": 37.15019999071956,
+   "p95_ms": 44.67745000729337,
+   "n": 15
+  },
+  "GET /sessions/{id}/heatmap (interval)": {
+   "mean_ms": 42.871506667385496,
+   "p50_ms": 37.92350005824119,
+   "p95_ms": 77.16284996131435,
+   "n": 15
+  },
+  "GET /sessions/{id}/trajectory": {
+   "mean_ms": 44.18794002073506,
+   "p50_ms": 45.43369996827096,
+   "p95_ms": 49.13625003537163,
+   "n": 15
+  },
+  "GET /sessions/{id}/annotations (30 s)": {
+   "mean_ms": 174.69611999889216,
+   "p50_ms": 139.1598000191152,
+   "p95_ms": 285.6779599911533,
+   "n": 15
+  },
+  "GET /sessions/{id}/events": {
+   "mean_ms": 12.504006658370296,
+   "p50_ms": 12.560699949972332,
+   "p95_ms": 13.190549903083593,
+   "n": 15
+  },
+  "GET /videos/{id}/frame": {
+   "mean_ms": 73.93338666297495,
+   "p50_ms": 65.75309997424483,
+   "p95_ms": 105.96130999037992,
+   "n": 15
+  }
+ }
+}

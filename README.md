@@ -80,7 +80,22 @@ Full definitions of every metric: [docs/methodology.md](docs/methodology.md).
 
 ## Evaluation
 
-<!-- EVALUATION -->
+**Synthetic benchmark** — 8 rendered 40 s scenes with exact ground truth; it validates the geometry,
+tracking-association, trajectory and metric layers, **not** YOLO/MediaPipe accuracy on real matches
+([full table](benchmarks/synthetic/results.md)):
+
+| Measure (8 scenarios) | Result |
+|---|---|
+| Court-mapping error after calibration (1.5–4 px click noise, or auto-detected) | 3.1–5.6 cm mean |
+| Player position error (filtered) | 3.6–7.2 cm MAE |
+| Distance covered, over observed time | 0.7–2.4 % below truth |
+| Mean speed | within 0.04 m/s |
+| Target identity through scripted occlusions | 2/2 occlusions re-linked, 0 frames on the wrong person |
+
+**Performance** on a laptop CPU (Ryzen 7 5825U, no GPU), 1280×720 input
+([details](benchmarks/performance/results.md)): *fast* mode processes video at 1.2× its duration,
+*balanced* at 2.1×, *accurate* at 9.8×; peak memory 0.7–0.9 GB; typical API reads 8–65 ms, a 30 s
+playback-annotation window ~140 ms.
 
 Real-footage accuracy is **not yet measured**: it requires annotated badminton video, which this repository
 does not include. The protocol and tooling to do it are ready: [docs/evaluation.md](docs/evaluation.md),
@@ -126,7 +141,9 @@ python scripts/run_synthetic_benchmark.py
 python scripts/benchmark_performance.py
 ```
 
-<!-- TESTS -->
+Current status: 92 backend tests (unit, API integration with a synthetic video end to end, and real
+YOLO11 + MediaPipe models on footage of real people) and 14 frontend unit tests pass locally; ruff and
+`tsc --noEmit` are clean.
 
 ## Example API usage
 

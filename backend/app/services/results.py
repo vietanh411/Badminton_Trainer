@@ -145,68 +145,64 @@ def annotations_payload(res: dict, start: float, end: float) -> dict:
     """Per-sample overlay data for synchronized playback, for one time window.
 
     Coordinates are returned in *analysis-frame* pixels together with the scale factor, so the
-    client maps them onto the displayed video regardless of its rendered size.
+    client maps them onto the displayed video regardless of its rendered size. Built from column
+    arrays (not row by row) because the player requests a window every 30 s of playback.
     """
     pos = res["positions"]
     summary = res["summary"]
-    m = (pos["t"] >= start) & (pos["t"] <= end)
-    idx = np.flatnonzero(m.to_numpy())
+    t_all = pos["t"].to_numpy(float)
+    idx = np.flatnonzero((t_all >= start) & (t_all <= end))
     tracks = res["tracks"]
     tr = tracks[(tracks["t"] >= start) & (tracks["t"] <= end)]
-    by_sample = {int(k): g for k, g in tr.groupby("sample_index")}
-    frames = []
+    people_by: dict[int, list] = {}
+    if len(tr):
+        boxes = np.round(tr[["x1", "y1", "x2", "y2"]].to_numpy(float), 1).tolist()
+        scores = np.round(tr["score"].to_numpy(float), 2).tolist()
+        for si, tid, b, sc in zip(tr["sample_index"].tolist(), tr["track_id"].tolist(), boxes, scores, strict=True):
+            people_by.setdefault(int(si), []).append({"id": int(tid), "b": b, "s": sc})
+
+    def col(name: str, digits: int) -> list:
+        v = np.round(pos[name].to_numpy(float)[idx], digits)
+        return [None if not np.isfinite(x) else float(x) for x in v]
+
+    xy = res["pose_xy"][idx].astype(float)
+    vis = res["pose_vis"][idx].astype(float)
+    pose_ok = np.isfinite(xy).all(axis=(1, 2))
+    pose_arr = np.round(np.concatenate([xy, vis[..., None]], axis=2), 2)
+    sample = pos["sample_index"].to_numpy()[idx].tolist()
+    tid = pos["track_id"].to_numpy(dtype=object)[idx]
+    status = pos["status"].to_numpy(dtype=object)[idx].tolist()
+    src = pos["position_source"].to_numpy(dtype=object)[idx].tolist()
+    t_r, fx, fy, conf = col("t", 3), col("img_x", 1), col("img_y", 1), col("position_confidence", 2)
     has_court = "court_x" in pos
-    for i in idx:
-        row = pos.iloc[i]
-        si = int(row["sample_index"])
-        people = by_sample.get(si)
-        others = []
-        if people is not None:
-            for r in people.itertuples():
-                others.append(
-                    {
-                        "id": int(r.track_id),
-                        "b": [round(r.x1, 1), round(r.y1, 1), round(r.x2, 1), round(r.y2, 1)],
-                        "s": round(float(r.score), 2),
-                    }
-                )
-        target_id = None if pd.isna(row["track_id"]) else int(row["track_id"])
-        xy = res["pose_xy"][i]
-        vis = res["pose_vis"][i]
-        pose = None
-        if np.all(np.isfinite(xy)):
-            pose = np.round(np.column_stack([xy, vis]), 2).tolist()
+    if has_court:
+        cx, cy, sp = col("court_x", 3), col("court_y", 3), col("speed", 2)
+        interp = pos["interpolated"].fillna(False).to_numpy(bool)[idx].tolist()
+    frames = []
+    for k in range(len(idx)):
         f = {
-            "t": round(float(row["t"]), 3),
-            "target": target_id,
-            "status": row["status"],
-            "people": others,
-            "pose": pose,
-            "foot": None
-            if not np.isfinite(row["img_x"])
-            else [round(float(row["img_x"]), 1), round(float(row["img_y"]), 1)],
-            "src": row["position_source"],
-            "conf": round(float(row["position_confidence"]), 2),
+            "t": t_r[k],
+            "target": None if pd.isna(tid[k]) else int(tid[k]),
+            "status": status[k],
+            "people": people_by.get(int(sample[k]), []),
+            "pose": pose_arr[k].tolist() if pose_ok[k] else None,
+            "foot": None if fx[k] is None else [fx[k], fy[k]],
+            "src": src[k],
+            "conf": conf[k],
         }
         if has_court:
-            f["court"] = (
-                None
-                if not np.isfinite(row["court_x"])
-                else [round(float(row["court_x"]), 3), round(float(row["court_y"]), 3)]
-            )
-            f["speed"] = None if not np.isfinite(row["speed"]) else round(float(row["speed"]), 2)
-            f["interp"] = bool(row["interpolated"])
+            f["court"] = None if cx[k] is None else [cx[k], cy[k]]
+            f["speed"] = sp[k]
+            f["interp"] = bool(interp[k])
         frames.append(f)
-    return clean_json(
-        {
-            "start": start,
-            "end": end,
-            "analysis_width": summary["analysis"]["width"],
-            "analysis_height": summary["analysis"]["height"],
-            "scale": summary["analysis"]["scale"],
-            "frames": frames,
-        }
-    )
+    return {
+        "start": start,
+        "end": end,
+        "analysis_width": summary["analysis"]["width"],
+        "analysis_height": summary["analysis"]["height"],
+        "scale": summary["analysis"]["scale"],
+        "frames": frames,
+    }
 
 
 def pose_series_payload(res: dict, landmark: str, window_s: float = 0.3) -> dict:
