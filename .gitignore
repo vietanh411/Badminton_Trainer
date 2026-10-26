@@ -1,4 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node
 node_modules/
-dist/
+frontend/dist/
+*.tsbuildinfo
+
+# Runtime data (uploads, artifacts, database) — never commit user footage
+data/
+backend/data/
+*.db
+*.sqlite
+
+# Model weights are downloaded by scripts/download_models.py
+models/weights/
+*.pt
+*.task
+*.tflite
+yolo*.pt
+
+# Environment
 .env
-*.log
+.env.local
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
